@@ -1,0 +1,29 @@
+=== ANALYSIS OF REMAINING ROOT FILES ===
+
+SYSTEM FILES (should move to system/):
+✗ main.c       - Entry point, minimal dependencies - MOVE TO system/
+✗ init.c       - Hardware initialization - MOVE TO system/
+✗ version.c    - Version info - MOVE TO system/
+✗ version.h    - Version header - MOVE TO system/
+✗ start.S      - ARM assembly startup - MOVE TO system/
+✗ audio.c      - Audio processing - MOVE TO audio/ (wasn't moved yet!)
+✗ audio.h      - Audio header - MOVE TO audio/
+
+CORE FILES (keep in root - heavily referenced):
+✓ misc.c       - 25+ dependencies
+✓ misc.h       - 25+ dependencies
+✓ settings.c   - Core settings
+✓ settings.h   - Core settings
+✓ board.c      - Hardware board config (minimal deps)
+✓ board.h      - Hardware board header (minimal deps)
+✓ debugging.h  - Debug info (minimal deps)
+
+CONFIG/BUILD FILES:
+✗ dp32g030.cfg - (git shows moved, but still in root) - MOVE TO config/
+✗ fw-pack.py   - Firmware packer - CAN MOVE TO config/
+
+SUMMARY:
+- 9 files need to move to system/ or audio/
+- 2 config files need to move/verify they moved
+- 1 Python script can move to config/
+- 5 core files correctly staying in root

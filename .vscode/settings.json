@@ -1,0 +1,36 @@
+{
+  "C_Cpp.default.includePath": [
+    "${workspaceFolder}",
+    "${workspaceFolder}/app",
+    "${workspaceFolder}/ui",
+    "${workspaceFolder}/driver",
+    "${workspaceFolder}/bsp",
+    "${workspaceFolder}/helper",
+    "${workspaceFolder}/core",
+    "${workspaceFolder}/system",
+    "${workspaceFolder}/graphics",
+    "${workspaceFolder}/radio",
+    "${workspaceFolder}/audio",
+    "${workspaceFolder}/external/printf",
+    "${workspaceFolder}/external/CMSIS_5/CMSIS/Core/Include",
+    "${workspaceFolder}/external/CMSIS_5/Device/ARM/ARMCM0/Include"
+  ],
+  "C_Cpp.default.browse.path": [
+    "${workspaceFolder}",
+    "${workspaceFolder}/app",
+    "${workspaceFolder}/ui",
+    "${workspaceFolder}/driver",
+    "${workspaceFolder}/bsp",
+    "${workspaceFolder}/helper",
+    "${workspaceFolder}/core",
+    "${workspaceFolder}/system",
+    "${workspaceFolder}/graphics",
+    "${workspaceFolder}/radio",
+    "${workspaceFolder}/audio",
+    "${workspaceFolder}/external/printf",
+    "${workspaceFolder}/external/CMSIS_5/CMSIS/Core/Include",
+    "${workspaceFolder}/external/CMSIS_5/Device/ARM/ARMCM0/Include"
+  ],
+  "C_Cpp.default.compilerPath": "/usr/bin/gcc",
+  "C_Cpp.default.intelliSenseMode": "gcc-x64"
+}

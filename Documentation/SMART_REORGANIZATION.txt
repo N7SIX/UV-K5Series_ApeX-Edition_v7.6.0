@@ -1,0 +1,50 @@
+=== SMART REORGANIZATION STRATEGY ===
+(Minimize #include changes by using compiler -I flags)
+
+CRITICAL DECISION:
+The Makefile already includes: -I. -Iapp -Iui -Idriver -Ibsp -Ihelper -Icore
+This means ANY header in these paths can be included with just #include "filename.h"
+
+STRATEGY: Move files to folders that are ALREADY in the compiler include path!
+- system/ → Add to Makefile: -Isystem
+- graphics/ → Add to Makefile: -Igraphics  
+- radio/ → Add to Makefile: -Iradio
+- audio/ → Add to Makefile: -Iaudio
+
+FILES TO REORGANIZE (LOW-RISK):
+
+SYSTEM FILES → system/
+- scheduler.c
+- sram-overlay.c, sram-overlay.h
+- screenshot.c, screenshot.h (or keep in app, but not critical system)
+
+GRAPHICS FILES → graphics/
+- bitmaps.c, bitmaps.h
+- font.c, font.h
+
+RADIO FILES → radio/
+- radio.c, radio.h
+- frequencies.c, frequencies.h
+- functions.c, functions.h
+- dcs.c, dcs.h
+
+AUDIO FILES → audio/
+- audio.c, audio.h (already has audio/)
+- am_fix.c, am_fix.h
+
+CONFIG FILES → config/
+- firmware.ld
+- printf_config.h
+- dp32g030.cfg
+
+KEEP IN ROOT (heavily referenced - minimize changes):
+- misc.c, misc.h (25+ dependencies!)
+- settings.c, settings.h (core settings)
+- board.c, board.h (hardware)
+- debugging.h
+
+BUILD SYSTEM CHANGES:
+1. Only update Makefile object file paths: radio/frequencies.o instead of frequencies.o
+2. Add new include paths: -Isystem -Igraphics -Iradio -Iaudio -Iconfig
+3. Remaining includes work with headers in any of these paths
+4. Linker script moved: config/firmware.ld

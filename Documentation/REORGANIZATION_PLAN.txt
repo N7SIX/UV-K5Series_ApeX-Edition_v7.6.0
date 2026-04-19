@@ -1,0 +1,26 @@
+=== PROFESSIONAL CODE REORGANIZATION PLAN ===
+
+PHASE 1: SYSTEM FILES
+system/ ← main.c, init.c, start.S, version.c, version.h, scheduler.c, scheduler.h, sram-overlay.c, sram-overlay.h
+
+PHASE 2: MEDIA FILES
+graphics/ ← bitmaps.c, bitmaps.h, font.c, font.h
+
+PHASE 3: RADIO FILES  
+radio/ ← radio.c, radio.h, frequencies.c, frequencies.h, functions.c, functions.h, dcs.c, dcs.h
+
+PHASE 4: AUDIO FILES
+audio/ ← audio.c, audio.h, am_fix.c, am_fix.h
+
+PHASE 5: CONFIG FILES
+config/ ← firmware.ld, dp32g030.cfg, printf_config.h
+
+PHASE 6: BUILD SYSTEM UPDATES
+- Update Makefile (60+ path changes)
+- Update compiler include paths
+- Test compilation
+
+PHASE 7: INCLUDE STATEMENT UPDATES
+- Root .c files: update relative paths
+- All subdirectory files: update includes
+- Driver files: update relative paths
