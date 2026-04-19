@@ -32,7 +32,7 @@
 
 #undef ENABLE_FMRADIO
 #undef ENABLE_NOAA
-#undef ENABLE_SCAN_RANGES
+#define ENABLE_SCAN_RANGES 1
 
 #include "functions.h"
 #include "core/settings.h"
