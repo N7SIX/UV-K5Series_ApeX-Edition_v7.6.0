@@ -3,16 +3,20 @@
 # Cross-platform Docker volume mount fix
 IMAGE_NAME="uvk5"
 # Detect Windows and convert $PWD to Windows-style path for Docker
-if [[ "$(uname -s)" =~ MINGW|MSYS|CYGWIN ]]; then
-    # Git Bash/MinGW/MSYS/WSL: convert /c/Users/... to C:/Users/...
-    WIN_PWD=$(pwd -W 2>/dev/null || cygpath -w "$(pwd)")
-    DOCKER_BUILD_PATH="${WIN_PWD}/build"
-else
-    DOCKER_BUILD_PATH="${PWD}/build"
-fi
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+        # Git Bash/MinGW/MSYS/WSL: convert /c/Users/... to C:/Users/...
+        WIN_PWD=$(pwd -W 2>/dev/null || cygpath -w "$(pwd)")
+        DOCKER_BUILD_PATH="${WIN_PWD}/build"
+        ;;
+    *)
+        DOCKER_BUILD_PATH="${PWD}/build"
+        ;;
+esac
 FIRMWARE_DIR="${PWD}/build/ApeX"
 # Default: Alpine 3.21; you can pass BASE=alpine:3.22 / alpine:3.19 / alpine:edge
 BASE="${BASE:-alpine:3.22}"
+CMD=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
 
 # --- Derive the Alpine tag from BASE ---
 case "$BASE" in
@@ -24,23 +28,30 @@ case "$BASE" in
     ;;
 esac
 
-# Create firmware output directory if it doesn't exist
-mkdir -p "$FIRMWARE_DIR"
+usage() {
+    echo "Usage: BASE=alpine:<tag> $0 {clean|ApeX|apex}"
+    echo "Examples: BASE=alpine:3.22 … | BASE=alpine:3.21 … | BASE=alpine:3.19 … | BASE=alpine:edge …"
+}
 
-# Clean previously compiled firmware files
-rm -f "$FIRMWARE_DIR"/*
+prepare_build() {
+    # Create firmware output directory if it doesn't exist
+    mkdir -p "$FIRMWARE_DIR"
 
-# Clean up old Docker artifacts
-echo "🧽 Cleaning up old Docker artifacts..."
-docker system prune -f --volumes >/dev/null 2>&1 || true
+    # Clean previously compiled firmware files
+    rm -f "$FIRMWARE_DIR"/*
 
-# Always rebuild the Docker image to ensure latest code changes
-echo "⚙️ Rebuilding Docker image '$IMAGE_NAME' (base=${BASE})..."
-docker rmi "$IMAGE_NAME" 2>/dev/null || true
-if ! docker build --pull --build-arg "ALPINE_TAG=${ALPINE_TAG}" -t "$IMAGE_NAME" .; then
-    echo "❌ Failed to build docker image"
-    exit 1
-fi
+    # Clean up old Docker artifacts
+    echo "🧽 Cleaning up old Docker artifacts..."
+    docker system prune -f --volumes >/dev/null 2>&1 || true
+
+    # Always rebuild the Docker image to ensure latest code changes
+    echo "⚙️ Rebuilding Docker image '$IMAGE_NAME' (base=${BASE})..."
+    docker rmi "$IMAGE_NAME" 2>/dev/null || true
+    if ! docker build --pull --build-arg "ALPINE_TAG=${ALPINE_TAG}" -t "$IMAGE_NAME" .; then
+        echo "❌ Failed to build docker image"
+        exit 1
+    fi
+}
 
 # -------------------- CLEAN ALL ---------------------
 
@@ -57,6 +68,7 @@ clean() {
 
 # ------------------ BUILD VARIANTS ------------------
 ApeX() {
+    prepare_build
     echo "🦾 Compiling ApeX..."
     docker run -v "$DOCKER_BUILD_PATH:/app/build" "$IMAGE_NAME" bash -c "\
         cd /app && make -s \
@@ -65,12 +77,11 @@ ApeX() {
 }
 # ------------------ MENU ------------------
 
-case "$1" in
+case "$CMD" in
     clean) clean ;;
-    ApeX) ApeX ;;
+    apex) ApeX ;;
     *)
-        echo "Usage: BASE=alpine:<tag> $0 {clean|ApeX}"
-        echo "Examples: BASE=alpine:3.22 … | BASE=alpine:3.21 … | BASE=alpine:3.19 … | BASE=alpine:edge …"
+        usage
         exit 1
         ;;
 esac

@@ -200,6 +200,11 @@ int MENU_GetLimits(uint8_t menu_id, int32_t *pMin, int32_t *pMax)
             *pMax = ARRAY_SIZE(gSubMenu_ROGER) - 1;
             break;
 
+        case MENU_VOL:
+            // SysInf uses submenu selection as page index.
+            *pMax = 2;
+            break;
+
         case MENU_PONMSG:
             //*pMin = 0;
             *pMax = ARRAY_SIZE(gSubMenu_PONMSG) - 1;
@@ -1281,6 +1286,11 @@ void MENU_ShowCurrentSetting(void)
 
         case MENU_ROGER:
             gSubMenuSelection = gEeprom.ROGER;
+            break;
+
+        case MENU_VOL:
+            // Always enter SysInf on the first page.
+            gSubMenuSelection = 0;
             break;
 
         case MENU_AM:
