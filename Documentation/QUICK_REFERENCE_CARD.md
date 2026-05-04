@@ -58,6 +58,10 @@ Press [0] for:
  CW  (Morse Code, Carrier Wave)
 ```
 
+Airband note (v7.6.6):
+- In `108.000-136.999 MHz`, modulation is automatically enforced to `AM`.
+- FM/USB/LSB/CW selections do not persist while tuned in airband.
+
 ---
 
 ## TX POWER QUICK SELECT
@@ -168,7 +172,7 @@ S8-S9 Strong signal, excellent contact
 | **16 CH** | — | 400-480 MHz | Default factory |
 | **VHF ONLY** | 136-174 MHz | — | Amateur 2m band |
 | **UHF ONLY** | — | 400-480 MHz | Amateur 70cm band |
-| **EXTENDED** | 108-174 MHz | 400-520 MHz | Broadcast + extended |
+| **EXTENDED** | 108-174 MHz | 400-520 MHz | Broadcast + extended; 108.000-136.999 MHz is AM-only |
 | **FULL RANGE** | 50-940 MHz* | *varies | Firmware-dependent |
 
 *Check firmware F-Lock setting (Menu → 01 FLck)*

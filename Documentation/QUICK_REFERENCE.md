@@ -29,7 +29,14 @@
 
 #### User Impact:
 - Safer, more robust firmware with professional-grade spectrum analyzer
+- Airband frequencies `108.000-136.999 MHz` now auto-enforce `AM`
+- FM/USB mode selection no longer persists while tuned in airband
 - All documentation up to date and organized for developer reference
+
+#### Airband Rule (v7.6.6 Addendum)
+- Airband voice channels are AM and are now enforced by frequency range.
+- Enforcement points include VFO init, channel reload, and user mode changes.
+- Outside airband, user-selectable modulation behavior is unchanged.
 
 # UV-K5 Analysis - Quick Reference Summary
 

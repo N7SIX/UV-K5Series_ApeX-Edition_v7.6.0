@@ -4,8 +4,8 @@
 
 **Edition:** ApeX Edition  
 **Authors:** Sean, N7SIX | Armel, F4HWN | Egzumer | DualTachyon  
-**Firmware Version:** 7.6.0  
-**Document Date:** February 28, 2026  
+**Firmware Version:** 7.6.6  
+**Document Date:** May 04, 2026  
 **Hardware:** Quansheng UV-K5, K5(8)/K6 (Version 1 Only)  
 
 ---
@@ -140,6 +140,13 @@ Below are the actual icons as they appear on the radio's display, represented in
 ## OPERATING MODES
 
 ### VFO (Variable Frequency Oscillator) Mode
+
+### Airband Modulation Behavior
+
+- Airband channels use **AM**.
+- In ApeX v7.6.6, frequencies in **108.000-136.999 MHz** are automatically normalized to **AM**.
+- If you try to select FM/USB/LSB/CW while tuned in that airband range, the radio will keep AM.
+- Outside airband, normal user modulation selection remains available.
 
 ### Accessing the Spectrum Analyzer
 
@@ -345,7 +352,7 @@ S0  S1  S2  S3  S4  S5  S6  S7  S8  S9  +10  +20
 | 01 | ![Lock](../icons_from_c/BITMAP_VFO_Lock.png) | **FLck** | OFF / ON | Lock modulation to selected band |
 | 02 | ![Power](../icons_from_c/gFontPowerSave.png) | **TxPow** | 5W / 2W / 1W / 500mW / 250mW / 125mW / <20mW | Set transmission power |
 | 03 | ![PowerSave](../icons_from_c/gFontPowerSave.png) | **RxExp** | OFF / ON | RX extension (disable to reduce battery drain) |
-| 04 | ![VFO](../icons_from_c/BITMAP_VFO_Default.png) | **Modulation** | FM / AM / USB / LSB / CW | RX demodulation mode |
+| 04 | ![VFO](../icons_from_c/BITMAP_VFO_Default.png) | **Modulation** | FM / AM / USB / LSB / CW | RX demodulation mode (airband 108.000-136.999 MHz is AM-only) |
 | 05 | ![Bandwidth](../icons_from_c/BITMAP_ScanListAll.png) | **BandWdth** | 12.5kHz / 25kHz / Auto | Receiver bandwidth |
 | 06 | ![Squelch](../icons_from_c/BITMAP_ScanList0.png) | **Squelch** | 0-9 | Detection threshold (0=off) |
 | 07 | ![ChName](../icons_from_c/BITMAP_ScanList1.png) | **ChName** | Input field | Channel name (6 chars) |
@@ -591,13 +598,14 @@ This firmware is provided **AS-IS** without warranty. The authors make no claims
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 7.6.6 | 2026-05-04 | Added airband AM-only behavior note; updated modulation menu note for aviation band behavior |
 | 7.6.0 | 2026-02-28 | Initial professional manual release (ApeX Edition) |
 
 ---
 
 **Manual prepared for the Quansheng UV-K5, K5(8)/K6 (Version 1 Only) ApeX Edition**  
-**Firmware Version 7.6.0**  
-**Document Date: February 28, 2026**
+**Firmware Version 7.6.6**  
+**Document Date: May 04, 2026**
 
 **© Sean, N7SIX | Armel, F4HWN | Egzumer | DualTachyon - Licensed under Apache 2.0**
 

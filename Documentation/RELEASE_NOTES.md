@@ -5,6 +5,11 @@
 **Status:** All critical and high-priority issues resolved, codebase fully audited and reorganized.
 
 #### Key Updates:
+- **Airband Modulation Enforcement Hotfix (May 2026):**
+  - Airband range `108.000-136.999 MHz` is now always clamped to `AM`
+  - Mode changes from menu/shortcut no longer allow `FM`/`USB` to persist on airband
+  - Fixed an invalid airband offset condition that could never trigger due to a duplicated boundary check
+  - Build validated successfully after patch: `./compile-with-docker.sh ApeX`
 - **Critical Security Fixes:**
   - Buffer overflow in UART (strcpy → strncpy, explicit null-termination)
   - Interrupt state management (save/restore with __get_PRIMASK)
@@ -29,7 +34,14 @@
 
 #### User Impact:
 - Safer, more robust firmware with professional-grade spectrum analyzer
+- Correct airband behavior with deterministic AM selection in the aviation band
 - All documentation up to date and organized for developer reference
+
+#### Airband Behavior Clarification (May 2026)
+- Airband voice channels are AM by design and are now enforced in firmware for the full airband span.
+- Enforcement is applied during VFO init, EEPROM/VFO reload, and user modulation changes.
+- If tuned inside `108.000-136.999 MHz`, modulation resolves to AM.
+- If tuned outside airband, normal user-selected modulation behavior remains unchanged.
 
 # UV-K5/K5(8)/K6 SERIES APEX EDITION
 
