@@ -9,13 +9,13 @@
 > 
 > **Compatible With:** Quansheng UV-K5 (v1), K5(8) (v1), K6 (v1)
 > 
-> **NOT Compatible With:** UV-K5 v2, K6 v2+, 5R, or any other radio models
+> **NOT Compatible With:** Quansheng 5R or any other unsupported radio models
 > 
-> **If your radio is NOT version 1, DO NOT use this firmware.** Using this on incompatible radios will permanently brick them.
+> **Use this firmware only on the supported models listed below.** Using this on incompatible radios can permanently brick them.
 
 ## Overview
 
-This is a professional-grade, feature-rich custom firmware for the **Quansheng UV-K5, K5(8)/K6 (version 1 only) handheld transceivers**. ApeX Edition is a basic Bandscope edition with Spectrum Analyzer + Waterfall, featuring improved stability, enhanced UI/UX, and security improvements.
+This is a professional-grade, feature-rich custom firmware for the **Quansheng UV-K5, K5(8), and K6 handheld transceivers on the supported hardware revisions listed below**. ApeX Edition is a basic Bandscope edition with Spectrum Analyzer + Waterfall, featuring improved stability, enhanced UI/UX, and security improvements.
 
 This repository is a fork of [Egzumer custom firmware](https://github.com/egzumer/uv-k5-firmware-custom), which merged [OneOfEleven custom firmware](https://github.com/OneOfEleven/uv-k5-firmware-custom) with [fagci spectrum analyzer](https://github.com/fagci/uv-k5-firmware-fagci-mod/tree/refactor). It is based on DualTachyon's open-source firmware [here](https://github.com/DualTachyon/uv-k5-firmware).
 
@@ -27,38 +27,36 @@ This repository is a fork of [Egzumer custom firmware](https://github.com/egzume
 > [!WARNING]
 > **HARDWARE COMPATIBILITY - CRITICAL:**
 > 
-> EN - THIS FIRMWARE IS SPECIFICALLY FOR VERSION 1 ONLY (UV-K5, K5(8)/K6). Using this firmware on v2, 5R, or any other model WILL PERMANENTLY BRICK YOUR RADIO with no recovery option except factory repair.
+> EN - THIS FIRMWARE IS SPECIFICALLY FOR THE SUPPORTED UV-K5 / K5(8) / K6 HARDWARE REVISIONS LISTED BELOW. Using this firmware on unsupported models such as 5R or any other incompatible hardware MAY PERMANENTLY BRICK YOUR RADIO with no recovery option except factory repair.
 >
-> THIS FIRMWARE HAS NO REAL BRAIN. PLEASE USE YOUR OWN. Use this firmware at your own risk (entirely). There is absolutely no guarantee that it will work in any way shape or form on your radio(s) if you have the correct v1 model, it may even brick your radio(s) due to user error, in which case, you'd need to buy another radio.
+> THIS FIRMWARE HAS NO REAL BRAIN. PLEASE USE YOUR OWN. Use this firmware at your own risk (entirely). There is absolutely no guarantee that it will work in any way shape or form on your radio(s) even if you have a supported model; it may still brick your radio(s) due to user error, in which case, you'd need to buy another radio.
 > Anyway, have fun.
 >
-> _FR - CE FIRMWARE EST SPÉCIFIQUEMENT POUR LE UV-K5 v1 UNIQUEMENT. Utiliser ce firmware sur UV-K5 v2, K6, 5R, ou tout autre modèle BRIQUEZ DÉFINITIVEMENT VOTRE RADIO sans option de récupération sauf réparation d'usine._
+> _FR - CE FIRMWARE EST SPÉCIFIQUEMENT DESTINÉ AUX RÉVISIONS PRISES EN CHARGE UV-K5 / K5(8) / K6 LISTÉES CI-DESSOUS. Utiliser ce firmware sur un 5R ou tout autre matériel incompatible PEUT BRIQUER DÉFINITIVEMENT VOTRE RADIO sans option de récupération sauf réparation d'usine._
 > [!CAUTION]
-> EN - I recommend to backup your eeprom with [k5prog](https://github.com/sq5bpf/k5prog) before playing with alternative firmwares for your UV-K5/K5(8)/K6 v1. It's a good reflex to have. 
+> EN - I recommend to backup your eeprom with [k5prog](https://github.com/sq5bpf/k5prog) before playing with alternative firmwares for any supported UV-K5/K5(8)/K6 model. It's a good reflex to have. 
 >
-> _FR - Je recommande de sauvegarder votre eeprom avec [k5prog](https://github.com/sq5bpf/k5prog) avant de jouer avec des firmwares alternatifs pour votre UV-K5 v1. C'est un bon réflexe à avoir._
+> _FR - Je recommande de sauvegarder votre eeprom avec [k5prog](https://github.com/sq5bpf/k5prog) avant de jouer avec des firmwares alternatifs pour tout modèle UV-K5/K5(8)/K6 pris en charge. C'est un bon réflexe à avoir._
 
 ## Supported Hardware
 
-**This firmware supports version 1 only of UV-K5, K5(8), and K6.** For other radio models or versions, please find appropriate firmware elsewhere.
+**This firmware supports UV-K5 v1/v2, K5(8) v1, and K6 v1/v2+.** For other radio models, please find appropriate firmware elsewhere.
 
 | Radio Model | Support | Notes |
 |---|---|---|
 | **Quansheng UV-K5 (v1)** | ✅ **SUPPORTED** | Original UV-K5 version 1 |
 | **Quansheng K5(8) (v1)** | ✅ **SUPPORTED** | K5 with 8 character display (v1) |
 | **Quansheng K6 (v1)** | ✅ **SUPPORTED** | K6 version 1 |
-| Quansheng UV-K5 (v2) | ❌ NOT SUPPORTED | Different hardware, will brick |
-| Quansheng K6 (v2+) | ❌ NOT SUPPORTED | Different hardware, will brick |
-| Quansheng 5R | ❌ NOT SUPPORTED | Different hardware, will brick |
-| Any other radio model | ❌ NOT SUPPORTED | Will definitely brick |
+| Quansheng UV-K5 (v2) | ✅ **SUPPORTED** | Supported hardware revision |
+| Quansheng K6 (v2+) | ✅ **SUPPORTED** | Supported hardware revision |
 
-## Firmware Variants (All UV-K5 v1 Only)
+## Firmware Variants (Supported UV-K5/K5(8)/K6 Models)
 
-The following firmware variants are all **exclusively for UV-K5 v1**:
+The following firmware variants are for the **supported UV-K5/K5(8)/K6 hardware revisions listed above**:
 
 - **ApeX Edition [RECOMMENDED]** - Basic Bandscope edition with Spectrum Analyzer + Waterfall
 
-All variants are compiled specifically for UV-K5 v1 hardware and will not function on other models.
+All variants are compiled specifically for the supported hardware listed above and may not function on other models.
 
 # Donations
 

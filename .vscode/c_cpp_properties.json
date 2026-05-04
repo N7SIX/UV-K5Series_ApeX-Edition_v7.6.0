@@ -22,10 +22,10 @@
         "__STDC__",
         "__STDC_VERSION__=201112L"
       ],
-                "compilerPath": "C:/Users/sebue/Downloads/arm-gnu-toolchain-14.3.rel1-mingw-w64-i686-arm-none-eabi/bin/arm-none-eabi-gcc.exe",
+            "compilerPath": "/usr/bin/arm-none-eabi-gcc",
       "cStandard": "c17",
       "cppStandard": "c++17",
-      "intelliSenseMode": "gcc-x64",
+      "intelliSenseMode": "linux-gcc-arm",
       "browse": {
         "path": [
           "${workspaceFolder}",

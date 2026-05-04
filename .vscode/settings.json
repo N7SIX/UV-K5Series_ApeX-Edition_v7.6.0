@@ -31,6 +31,6 @@
     "${workspaceFolder}/external/CMSIS_5/CMSIS/Core/Include",
     "${workspaceFolder}/external/CMSIS_5/Device/ARM/ARMCM0/Include"
   ],
-  "C_Cpp.default.compilerPath": "/usr/bin/gcc",
-  "C_Cpp.default.intelliSenseMode": "gcc-x64"
+  "C_Cpp.default.compilerPath": "/usr/bin/arm-none-eabi-gcc",
+  "C_Cpp.default.intelliSenseMode": "linux-gcc-arm"
 }
