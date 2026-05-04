@@ -649,6 +649,17 @@ static void MAIN_Key_EXIT(bool bKeyPressed, bool bKeyHeld)
         if (!gFmRadioMode)
 #endif
         {
+#ifdef ENABLE_SCAN_RANGES
+            // Allow EXIT to clear an active scan range (same outcome as KEY_7 toggle-off).
+            if (gScanStateDir == SCAN_OFF && gScanRangeStart != 0 && gInputBoxIndex == 0) {
+                gScanRangeStart       = 0;
+                gScanRangeStop        = 0;
+                gUpdateStatus         = true;
+                gRequestDisplayScreen = DISPLAY_MAIN;
+                return;
+            }
+#endif
+
             if (gScanStateDir == SCAN_OFF) {
                 if (gInputBoxIndex == 0)
                     return;
