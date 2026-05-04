@@ -812,7 +812,7 @@ void MENU_AcceptSetting(void)
             break;
 
         case MENU_AM:
-            gTxVfo->Modulation     = gSubMenuSelection;
+            gTxVfo->Modulation = RADIO_GetModulationForFrequency(gTxVfo->freq_config_RX.Frequency, gSubMenuSelection);
             gRequestSaveChannel = 1;
             return;
 

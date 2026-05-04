@@ -70,6 +70,9 @@ typedef enum {
 
 extern const char gModulationStr[MODULATION_UKNOWN][4];
 
+bool     RADIO_IsAirbandFrequency(uint32_t frequency);
+ModulationMode_t RADIO_GetModulationForFrequency(uint32_t frequency, ModulationMode_t modulation);
+
 typedef struct
 {
     uint32_t       Frequency;

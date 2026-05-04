@@ -280,6 +280,8 @@ void ACTION_SwitchDemodul(void)
 
     if(gTxVfo->Modulation == MODULATION_UKNOWN)
         gTxVfo->Modulation = MODULATION_FM;
+
+    gTxVfo->Modulation = RADIO_GetModulationForFrequency(gTxVfo->freq_config_RX.Frequency, gTxVfo->Modulation);
 }
 
 

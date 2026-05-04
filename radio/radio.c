@@ -54,6 +54,17 @@ const char gModulationStr[MODULATION_UKNOWN][4] = {
 #endif
 };
 
+bool RADIO_IsAirbandFrequency(uint32_t frequency)
+{
+    return frequency >= frequencyBandTable[BAND2_108MHz].lower
+        && frequency < frequencyBandTable[BAND2_108MHz].upper;
+}
+
+ModulationMode_t RADIO_GetModulationForFrequency(uint32_t frequency, ModulationMode_t modulation)
+{
+    return RADIO_IsAirbandFrequency(frequency) ? MODULATION_AM : modulation;
+}
+
 bool RADIO_CheckValidChannel(uint16_t channel, bool checkScanList, uint8_t scanList)
 {
     // return true if the channel appears valid
@@ -126,10 +137,7 @@ void RADIO_InitInfo(VFO_Info_t *pInfo, const uint8_t ChannelSave, const uint32_t
     pInfo->pTX                      = &pInfo->freq_config_TX;
     pInfo->Compander                = 0;  // off
 
-    if (ChannelSave == (FREQ_CHANNEL_FIRST + BAND2_108MHz))
-        pInfo->Modulation = MODULATION_AM;
-    else
-        pInfo->Modulation = MODULATION_FM;
+    pInfo->Modulation = RADIO_GetModulationForFrequency(Frequency, MODULATION_FM);
 
     RADIO_ConfigureSquelchAndOutputPower(pInfo);
 }
@@ -240,7 +248,7 @@ void RADIO_ConfigureChannel(const unsigned int VFO, const unsigned int configure
         tmp = data[3] >> 4;
         if (tmp >= MODULATION_UKNOWN)
             tmp = MODULATION_FM;
-        pVfo->Modulation = tmp;
+        pVfo->Modulation = RADIO_GetModulationForFrequency(pVfo->freq_config_RX.Frequency, tmp);
 
         tmp = data[6];
         if (tmp >= STEP_N_ELEM)
@@ -372,10 +380,12 @@ void RADIO_ConfigureChannel(const unsigned int VFO, const unsigned int configure
 
     pVfo->freq_config_RX.Frequency = frequency;
 
-    if (frequency >= frequencyBandTable[BAND2_108MHz].upper && frequency < frequencyBandTable[BAND2_108MHz].upper)
+    if (RADIO_IsAirbandFrequency(frequency))
         pVfo->TX_OFFSET_FREQUENCY_DIRECTION = TX_OFFSET_FREQUENCY_DIRECTION_OFF;
     else if (!IS_MR_CHANNEL(channel))
         pVfo->TX_OFFSET_FREQUENCY = FREQUENCY_RoundToStep(pVfo->TX_OFFSET_FREQUENCY, pVfo->StepFrequency);
+
+    pVfo->Modulation = RADIO_GetModulationForFrequency(frequency, pVfo->Modulation);
 
     RADIO_ApplyOffset(pVfo);
 
