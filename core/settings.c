@@ -548,6 +548,10 @@ void SETTINGS_FactoryReset(bool bIsAll)
             }
         #endif
 
+        // Patch SQUELCH_LEVEL to match backup (EEPROM 0x0E71 = 0)
+        uint8_t squelch_level = 0;
+        EEPROM_WriteBuffer(0x0E71, &squelch_level);
+
         #ifdef ENABLE_FEAT_N7SIX
             EEPROM_WriteBuffer(0x1FF0, Template);
         #endif
