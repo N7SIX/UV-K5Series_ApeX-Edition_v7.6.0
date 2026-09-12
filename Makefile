@@ -14,7 +14,7 @@ ENABLE_ALARM                    ?= 0
 ENABLE_TX1750                   ?= 0
 ENABLE_PWRON_PASSWORD           ?= 0
 ENABLE_DTMF_CALLING             ?= 0
-ENABLE_FLASHLIGHT               ?= 1
+ENABLE_FLASHLIGHT               ?= 0
 
 # ---- CUSTOM MODS ----
 ENABLE_SPECTRUM                 ?= 1
@@ -51,6 +51,8 @@ ENABLE_REGA                     ?= 0
 # ---- N7SIX MODS ----
 
 ENABLE_FEAT_N7SIX               ?= 1
+ENABLE_FEAT_N7SIX_MEM           ?= 0
+ENABLE_FEAT_N7SIX_QRCODE        ?= 0
 ENABLE_FEAT_N7SIX_GAME          ?= 0
 ENABLE_FEAT_N7SIX_SCREENSHOT    ?= 0
 ENABLE_FEAT_N7SIX_SPECTRUM      ?= 0
@@ -471,6 +473,12 @@ ifeq ($(ENABLE_FEAT_N7SIX),1)
 	CFLAGS  += -DEDITION_STRING=\"$(EDITION_STRING)\"
 else
 	CFLAGS  += -DSQL_TONE=550
+endif
+ifeq ($(ENABLE_FEAT_N7SIX_MEM),1)
+	CFLAGS  += -DENABLE_FEAT_N7SIX_MEM
+endif
+ifeq ($(ENABLE_FEAT_N7SIX_QRCODE),1)
+	CFLAGS  += -DENABLE_FEAT_N7SIX_QRCODE
 endif
 ifeq ($(ENABLE_FEAT_N7SIX_GAME),1)
 	CFLAGS  += -DENABLE_FEAT_N7SIX_GAME

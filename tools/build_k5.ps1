@@ -12,7 +12,7 @@ if (-not (Get-Command $CC -ErrorAction SilentlyContinue)) {
 }
 
 $defines = @(
-    '-DENABLE_UART','-DENABLE_FLASHLIGHT','-DENABLE_SPECTRUM','-DENABLE_BIG_FREQ',
+    '-DENABLE_UART','-DENABLE_SPECTRUM','-DENABLE_BIG_FREQ',
     '-DENABLE_SMALL_BOLD','-DENABLE_CUSTOM_MENU_LAYOUT','-DENABLE_RSSI_BAR',
     '-DENABLE_AUDIO_BAR','-DENABLE_SCAN_RANGES','-DENABLE_FEAT_N7SIX',
     '-DALERT_TOT=10','-DSQL_TONE=550',
@@ -28,7 +28,7 @@ $warnings = @('-Wall','-Wextra','-Werror','-Wno-wchar-t-default')
 $cflags = @(
     '-Oz','-mcpu=cortex-m0','-fshort-enums','-fno-delete-null-pointer-checks',
     '-std=c2x','-MMD','-fshort-wchar',
-    '-funroll-loops','-ffat-lto-objects','-flto=auto'
+    '-ffat-lto-objects','-flto=auto'
 ) + $warnings + $defines
 
 $inc = @(
@@ -45,7 +45,7 @@ $sources = @(
     'driver/eeprom.c','driver/gpio.c','driver/i2c.c','driver/keyboard.c','driver/spi.c',
     'driver/st7565.c','driver/system.c','driver/systick.c','driver/uart.c',
     'app/action.c','app/app.c','app/chFrScanner.c','app/common.c','app/dtmf.c',
-    'app/flashlight.c','app/generic.c','app/main.c','app/menu.c','app/mdc1200.c',
+    'app/generic.c','app/main.c','app/menu.c','app/mdc1200.c',
     'app/mdc_handler.c','app/spectrum.c','app/waterfall.c','app/scanner.c','app/uart.c',
     'audio/audio.c',
     'graphics/bitmaps.c','core/board.c','radio/dcs.c','graphics/font.c',
