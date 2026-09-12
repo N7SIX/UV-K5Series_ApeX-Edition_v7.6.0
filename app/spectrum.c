@@ -2648,8 +2648,9 @@ void APP_RunSpectrum()
             gEeprom.CURRENT_STATE = 5;
         #endif
     }
-    else {
+    else
 #endif
+    {
         currentFreq = initialFreq = gTxVfo->pRX->Frequency -
                                     ((GetStepsCount() / 2) * GetScanStep());
         #ifdef ENABLE_FEAT_N7SIX_RESUME_STATE
