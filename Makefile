@@ -566,6 +566,8 @@ ifneq (, $(shell $(WHERE) python))
     MY_PYTHON := python
 else ifneq (, $(shell $(WHERE) python3))
     MY_PYTHON := python3
+else ifneq (, $(shell $(WHERE) py))
+    MY_PYTHON := py -3
 endif
 
 ifdef MY_PYTHON
