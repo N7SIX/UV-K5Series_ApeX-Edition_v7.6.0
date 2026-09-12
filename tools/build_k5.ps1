@@ -17,10 +17,10 @@ $defines = @(
     '-DENABLE_AUDIO_BAR','-DENABLE_SCAN_RANGES','-DENABLE_FEAT_N7SIX',
     '-DALERT_TOT=10','-DSQL_TONE=550',
     "-DAUTHOR_STRING_1=`"EGZUMER`"","-DVERSION_STRING_1=`"v0.22`"",
-    "-DAUTHOR_STRING_2=`"N7SIX`"","-DVERSION_STRING_2=`"v7.6.7`"",
+    "-DAUTHOR_STRING_2=`"N7SIX`"","-DVERSION_STRING_2=`"v7.6.10`"",
     "-DEDITION_STRING=`"Custom`"",
     '-DPRINTF_INCLUDE_CONFIG_H',
-    "-DAUTHOR_STRING=`"EGZUMER+N7SIX`"","-DVERSION_STRING=`"v7.6.7`""
+    "-DAUTHOR_STRING=`"EGZUMER+N7SIX`"","-DVERSION_STRING=`"v7.6.10`""
 )
 
 $warnings = @('-Wall','-Wextra','-Werror','-Wno-wchar-t-default')

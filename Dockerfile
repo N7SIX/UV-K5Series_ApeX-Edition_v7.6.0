@@ -22,5 +22,8 @@ WORKDIR /app
 
 # Copy sources into the image (the script mounts the repo and runs builds)
 COPY . .
-RUN make clean || true
-RUN find . -name '*.d' -delete
+
+# Kill ALL stale host artifacts unconditionally — LTO bytecode from a
+# different GCC major version is fatal inside this image.
+RUN find . \( -name '*.o' -o -name '*.d' \) -delete \
+ && rm -rf build/ n7six ApeX || true

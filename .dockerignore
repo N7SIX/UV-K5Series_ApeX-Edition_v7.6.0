@@ -1,0 +1,19 @@
+# Stale host build artifacts (GCC 14 / LTO 14.0) break GCC 15.1.0 (LTO 15.0)
+# inside the container — never let them into the build context.
+*.o
+*.d
+build/
+n7six
+ApeX
+*.log
+*.elf
+*.bin
+.git/
+*.zip
+*.pptx
+*.docx
+*.pdf
+docker_build.log
+local_build*.log
+make_run.log
+build_docker*.log

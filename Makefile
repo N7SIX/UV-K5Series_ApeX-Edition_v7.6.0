@@ -255,7 +255,7 @@ ifeq ($(ENABLE_FEAT_N7SIX),1)
 	VERSION_STRING_1 ?= v0.22
 
 	AUTHOR_STRING_2 ?= N7SIX
-	VERSION_STRING_2 ?= v7.6.6
+	VERSION_STRING_2 ?= v7.6.10
 
 	EDITION_STRING ?= Custom
 
@@ -599,8 +599,8 @@ all: $(TARGET)
 	@echo "VERSION_STRING: $(VERSION_STRING)"
 	@echo "Build type: Release"
 	@echo "EXE_NAME = $(TARGET)"
-	rm -rf build/ApeX
-	@echo "Deleted old build/ApeX folder."
+	rm -f build/ApeX/* 2>/dev/null || true
+	@echo "Cleared old build/ApeX contents."
 	mkdir -p build/ApeX
 	@if [ ! -f $(TARGET) ]; then \
 		echo "\n❌ ERROR: Firmware output '$(TARGET)' was not created.\nCheck for build errors above.\n"; \
