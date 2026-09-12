@@ -1,0 +1,39 @@
+# ---- Build artifacts ----
+build/
+*.o
+*.d
+*.elf
+*.bin
+*.map
+ApeX
+n7six
+firmware
+linkcmd.txt
+n7six_link.txt
+runlink.cmd
+n7six_link.cmd
+
+# ---- Logs & temp output ----
+*.log
+*.txt
+!README.md
+ui_menu_err.txt
+ntest.txt
+ntestB.txt
+docker_build_output.txt
+error_output.txt
+
+# ---- Temp/dev scripts ----
+fix_*.ps1
+run_build.ps1
+make_run.ps1
+
+# ---- Installers & toolchains ----
+MinGW-w64-setup.exe
+
+# ---- IDE ----
+.vscode/
+
+# ---- OS ----
+Thumbs.db
+Desktop.ini

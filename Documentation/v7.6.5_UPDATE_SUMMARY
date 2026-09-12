@@ -1,0 +1,42 @@
+
+v7.6.5_UPDATE_SUMMARY — Professional Modernization & Reorganization
+-------------------------------------------------------------------
+Firmware Build: v7.6.5 ApeX Edition  
+Date: March 24, 2026  
+Focus: Professional codebase reorganization, build system modernization, documentation, and security
+
+Summary of Major Enhancements & Updates
+---------------------------------------
+**1. Full Codebase Reorganization:**
+	- All .c, .h, and .cfg files moved into logical folders: `system/`, `radio/`, `graphics/`, `audio/`, `config/`.
+	- Directory structure, dependency mapping, and rationale fully documented.
+
+**2. Build System & CI/CD Modernization:**
+	- Makefile, Docker, and GitHub Actions workflow updated for new structure and non-interactive builds.
+	- All build and IntelliSense errors resolved after the move.
+	- FLASH and RAM usage optimized and confirmed to fit hardware constraints.
+
+**3. Professional Code Headers & Attribution:**
+	- All .c and .h files updated with multi-line professional headers, author attribution, and license.
+	- Enhancement and modification notes included in each file.
+
+**4. Documentation Overhaul:**
+	- All .md and .txt files updated to reflect new structure, features, and professional standards.
+	- New documentation files created: `COMMITS_MESSAGE.txt`, `v7.6.5_UPDATE_SUMMARY`, reorganization plans, and dependency graphs.
+
+**5. Security, Safety, and Bugfixes:**
+	- All strcpy() replaced with strncpy() and explicit null-termination for buffer safety.
+	- Prevented buffer overflows, fixed SPI bus lockup, improved UART compatibility, and display rendering.
+
+**6. Feature and Bugfix Preservation:**
+	- All features from previous versions preserved; no code removed or commented out.
+	- Spectrum analyzer and UI enhancements: standardized helper usage, improved display logic, updated architecture diagrams.
+
+**7. RAM and Code Optimization:**
+	- Static helper functions moved to file scope, lookup tables and buffers marked as const where possible.
+
+**8. All changes tracked via git for full history.**
+
+---
+
+For a complete breakdown of the reorganization, see also: `COMMITS_MESSAGE.txt`, `REORGANIZATION_COMPLETE.md`, and `README.md`.
