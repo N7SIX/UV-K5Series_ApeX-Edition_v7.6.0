@@ -164,7 +164,6 @@ endif
 OBJS += app/generic.o
 OBJS += app/main.o
 OBJS += app/menu.o
-OBJS += app/mdc_handler.o
 ifeq ($(ENABLE_SPECTRUM),1)
 OBJS += app/spectrum.o
 OBJS += app/waterfall.o
@@ -211,7 +210,6 @@ ifeq ($(ENABLE_PWRON_PASSWORD),1)
 endif
 OBJS += ui/main.o
 OBJS += ui/menu.o
-OBJS += ui/mdc.o
 OBJS += ui/scanner.o
 OBJS += ui/status.o
 OBJS += ui/ui.o

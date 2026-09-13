@@ -45,7 +45,6 @@
 #include "ui/ui.h"
 #include "audio.h"
 #include "menu.h"
-#include "../mdc_handler.h"
 
 #ifdef ENABLE_FEAT_N7SIX
     #include "driver/system.h"
@@ -1230,11 +1229,8 @@ void UI_MAIN_TimeSlice500ms(void)
 {
     if(gScreenToDisplay==DISPLAY_MAIN) {
 #ifdef ENABLE_AGC_SHOW_DATA
-        if (center_line != CENTER_LINE_MDC_ALERT)
-        {
-            UI_MAIN_PrintAGC(true);
-            return;
-        }
+        UI_MAIN_PrintAGC(true);
+        return;
 #endif
 
 #ifdef ENABLE_FEAT_N7SIX_CW
@@ -1295,9 +1291,6 @@ void UI_MAIN_TimeSlice500ms(void)
         }
 #endif
     }
-
-    /* Phase 3: Check for MDC alert timeout */
-    MDC_UITimeSlice500ms();
 }
 
 // ----------------------------------------
@@ -1335,19 +1328,7 @@ void UI_DisplayMain(void)
     const bool         cwSingleVfoView = false;
 #endif
 
-    /*
-     * Do NOT clobber an active MDC alert here.  When MDC_TriggerDisplay()
-     * (in the 10ms interrupt handler) sets center_line = CENTER_LINE_MDC_ALERT
-     * and gUpdateDisplay = true, this function is called within the SAME
-     * 10ms tick.  If we reset center_line unconditionally to NONE, the
-     * "if (center_line == CENTER_LINE_MDC_ALERT)" check far below at line 2478
-     * will never fire, UI_DisplayMDCAlert() is never called, and the MDC-ID
-     * (Unit ID) is never displayed.  Preserve MDC_ALERT so the rendering
-     * logic below can honour it.  After timeout/dismiss restores
-     * previous_mode, the next render cycle resets normally.
-     */
-    if (center_line != CENTER_LINE_MDC_ALERT)
-        center_line = CENTER_LINE_NONE;
+    center_line = CENTER_LINE_NONE;
 
 #ifdef ENABLE_FEAT_N7SIX_SCAN_PROGRESS
     if (gScanStateDir == SCAN_OFF)
@@ -2229,15 +2210,8 @@ void UI_DisplayMain(void)
     }
 
 #ifdef ENABLE_AGC_SHOW_DATA
-    /* Do not let the AGC readout clobber an active MDC alert: the AGC block
-     * runs unconditionally on every render and was overwriting
-     * CENTER_LINE_MDC_ALERT with CENTER_LINE_IN_USE, which prevented
-     * UI_DisplayMDCAlert() from ever being called (MDC-ID never shown). */
-    if (center_line != CENTER_LINE_MDC_ALERT)
-    {
-        center_line = CENTER_LINE_IN_USE;
-        UI_MAIN_PrintAGC(false);
-    }
+    center_line = CENTER_LINE_IN_USE;
+    UI_MAIN_PrintAGC(false);
 #endif
 
 #if defined(ENABLE_SCAN_RANGES) && defined(ENABLE_FEAT_N7SIX) && defined(ENABLE_FEAT_N7SIX_SCAN_SUBAUDIBLE) && ENABLE_FEAT_N7SIX_SCAN_SUBAUDIBLE
@@ -2385,11 +2359,6 @@ void UI_DisplayMain(void)
             }
 #endif
         }
-    }
-
-    /* Phase 3: Render MDC alert when active (high priority, always visible) */
-    if (center_line == CENTER_LINE_MDC_ALERT) {
-        UI_DisplayMDCAlert();
     }
 
 #ifdef ENABLE_FEAT_N7SIX_CW

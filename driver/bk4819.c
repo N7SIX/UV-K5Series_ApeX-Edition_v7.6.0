@@ -1698,7 +1698,7 @@ static void BK4819_PlayRogerNormal(void)
 }
 
 
-void BK4819_PlayRogerMDC(void)
+void BK4819_PlayRogerMDC(bool extended)
 {
     struct reg_value {
         BK4819_REGISTER_t reg;
@@ -1733,12 +1733,14 @@ void BK4819_PlayRogerMDC(void)
         BK4819_WriteRegister(BK4819_REG_5F, FSK_RogerTable[i]);
     }
 
-    SYSTEM_DelayMs(20);
+    // "MDC-1200L" profile: extended pretime + longer burst hold, mirroring
+    // the L-profile's longer composite preamble (weak-signal reach).
+    SYSTEM_DelayMs(extended ? 120 : 20);
 
     // 4 sync bytes, 6 byte preamble, Enable FSK TX
     BK4819_WriteRegister(BK4819_REG_59, 0x0868);
 
-    SYSTEM_DelayMs(180);
+    SYSTEM_DelayMs(extended ? 260 : 180);
 
     // Stop FSK TX, reset Tone-2, disable FSK
     BK4819_WriteRegister(BK4819_REG_59, 0x0068);
@@ -1748,10 +1750,19 @@ void BK4819_PlayRogerMDC(void)
 
 void BK4819_PlayRoger(void)
 {
-    if (gEeprom.ROGER == ROGER_MODE_ROGER) {
-        BK4819_PlayRogerNormal();
-    } else if (gEeprom.ROGER == ROGER_MODE_MDC) {
-        BK4819_PlayRogerMDC();
+    switch (gEeprom.ROGER)
+    {
+        case ROGER_MODE_ROGER:
+            BK4819_PlayRogerNormal();
+            break;
+        case ROGER_MODE_MDC:
+            BK4819_PlayRogerMDC(false);
+            break;
+        case ROGER_MODE_MDC_L:
+            BK4819_PlayRogerMDC(true);
+            break;
+        default:
+            break;
     }
 }
 

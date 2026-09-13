@@ -29,7 +29,6 @@ enum center_line_t {
     CENTER_LINE_AM_FIX_DATA,
     CENTER_LINE_DTMF_DEC,
     CENTER_LINE_CHARGE_DATA,
-    CENTER_LINE_MDC_ALERT,              /*!< Phase 3: MDC RX notification */
 #ifdef ENABLE_FEAT_N7SIX_BEAM
     CENTER_LINE_BEAM
 #endif

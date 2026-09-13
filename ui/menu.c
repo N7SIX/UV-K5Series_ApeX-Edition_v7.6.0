@@ -252,7 +252,6 @@ const t_menu_item MenuList[] =
     {"BusyCL",      MENU_BCL           },
     {"UPCode",      MENU_UPCODE        },
     {"DWCode",      MENU_DWCODE        },
-    {"MDC ID",      MENU_MDC_ID        },
     {"PTT ID",      MENU_PTT_ID        },
     {"Roger",       MENU_ROGER         },
 #ifdef ENABLE_FEAT_N7SIX
@@ -479,9 +478,7 @@ const char* const gSubMenu_PTT_ID[] =
     "UP CODE",
     "DOWN CODE",
     "UP+DOWN\nCODE",
-    "APOLLO\nQUINDAR",
-    "MDC-1200",
-    "MDC-1200L"
+    "APOLLO\nQUINDAR"
 };
 
 const char* const gSubMenu_PONMSG[] =
@@ -514,7 +511,8 @@ const char* const gSubMenu_ROGER[] =
 {
     "OFF",
     "ROGER",
-    "MDC"
+    "MDC-1200",
+    "MDC-1200L"
 };
 
 const char* const gSubMenu_RESET[] =
@@ -1422,25 +1420,6 @@ void UI_DisplayMenu(void)
 
         case MENU_ROGER:
             strcpy(String, gSubMenu_ROGER[gSubMenuSelection]);
-            break;
-
-        case MENU_MDC_ID:
-            if (gIsInSubMenu && gInputBoxIndex > 0)
-            {
-                /* Show hex input in progress: 0x____ → 0x1___ → 0x12__ → etc. */
-                char hex_str[7] = "0x____";
-                for (uint8_t i = 0; i < gInputBoxIndex; i++)
-                {
-                    uint8_t digit_val = (uint8_t)gInputBox[i];
-                    hex_str[2 + i] = (digit_val < 10) ? ('0' + digit_val) : ('A' + (digit_val - 10));
-                }
-                strcpy(String, hex_str);
-            }
-            else
-            {
-                /* Show saved hex value */
-                sprintf(String, "0x%04X", (unsigned int)gSubMenuSelection);
-            }
             break;
 
         case MENU_VOL: {

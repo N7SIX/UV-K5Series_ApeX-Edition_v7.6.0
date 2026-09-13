@@ -149,7 +149,8 @@ typedef enum ALARM_Mode_t ALARM_Mode_t;
 enum ROGER_Mode_t {
     ROGER_MODE_OFF = 0,
     ROGER_MODE_ROGER,
-    ROGER_MODE_MDC
+    ROGER_MODE_MDC,
+    ROGER_MODE_MDC_L
 };
 typedef enum ROGER_Mode_t ROGER_Mode_t;
 
@@ -235,7 +236,6 @@ typedef struct {
     POWER_OnDisplayMode_t POWER_ON_DISPLAY_MODE;
     ROGER_Mode_t          ROGER;
     uint8_t               REPEATER_TAIL_TONE_ELIMINATION;
-    uint16_t              MDC_UnitID;
     uint8_t               KEY_1_SHORT_PRESS_ACTION;
     uint8_t               KEY_1_LONG_PRESS_ACTION;
     uint8_t               KEY_2_SHORT_PRESS_ACTION;

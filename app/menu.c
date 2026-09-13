@@ -181,11 +181,6 @@ int MENU_GetLimits(uint8_t menu_id, int32_t *pMin, int32_t *pMax)
             *pMax = ARRAY_SIZE(gSubMenu_ROGER) - 1;
             break;
 
-        case MENU_MDC_ID:
-            *pMin = 0;
-            *pMax = 0xFFFF;
-            break;
-
         case MENU_PONMSG:
             //*pMin = 0;
             *pMax = ARRAY_SIZE(gSubMenu_PONMSG) - 1;
@@ -858,10 +853,6 @@ void MENU_AcceptSetting(void)
             gEeprom.ROGER = gSubMenuSelection;
             break;
 
-                case MENU_MDC_ID:
-            gEeprom.MDC_UnitID = (uint16_t)gSubMenuSelection;
-            break;
-
         case MENU_UPCODE:
         case MENU_DWCODE:
             /* DTMF codes are edited directly in the digit handler */
@@ -1392,10 +1383,6 @@ void MENU_ShowCurrentSetting(void)
             gSubMenuSelection = gEeprom.ROGER;
             break;
 
-        case MENU_MDC_ID:
-            gSubMenuSelection = gEeprom.MDC_UnitID;
-            break;
-
         case MENU_AM:
             gSubMenuSelection = gTxVfo->Modulation;
             break;
@@ -1588,7 +1575,6 @@ static KEY_Code_t edit_last_key = 255;
 static uint8_t edit_char_index = 0;
 static bool    gDTMFCodeDirty  = false;   // UP/DW code edited since submenu entry
 static bool    dtmf_letter_cycle = false; // last UP/DOWN press placed/cycled a DTMF letter
-static bool    mdc_letter_cycle  = false; // last UP/DOWN press placed/cycled an MDC hex letter (A-F)
 
 static const char* const char_map[10] = {
     " 0",                           // KEY_0
@@ -1669,7 +1655,6 @@ static void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
         return;
 
     INPUTBOX_Append(Key);
-    mdc_letter_cycle = false;   // a digit landed; next UP/DOWN places a new letter
 
     gRequestDisplayScreen = DISPLAY_MENU;
 
@@ -1736,34 +1721,6 @@ static void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
     }
 
     const int m = UI_MENU_GetCurrentMenuId();
-
-    if (m == MENU_MDC_ID)
-    {
-        /* For hex input, limit to 4 digits exactly */
-        if (gInputBoxIndex < 4)
-        {
-            #ifdef ENABLE_VOICE
-                gAnotherVoiceID = (VOICE_ID_t)Key;
-            #endif
-            gRequestDisplayScreen = DISPLAY_MENU;
-            return;
-        }
-
-        if (gInputBoxIndex == 4)
-        {
-            /* Accumulate hex value from 4 input digits (each 0-15 range) */
-            uint32_t value = 0;
-            for (uint8_t i = 0; i < 4; i++)
-                value = (value * 16u) + (uint32_t)gInputBox[i];
-
-            /* Update both display and EEPROM directly for immediate persistence */
-            gSubMenuSelection = (int32_t)value;
-            gEeprom.MDC_UnitID = (uint16_t)value;
-            gRequestSaveSettings = true;  /* Trigger immediate EEPROM save */
-            gInputBoxIndex = 0;  /* Reset for potential re-entry */
-        }
-        return;  /* Ignore any digits beyond the 4th */
-    }
 
     if (m == MENU_MEM_CH ||
         m == MENU_DEL_CH ||
@@ -2019,7 +1976,7 @@ Skip:
                 return;
             }
 
-            if (gInputBoxIndex == 0 || (menu_id != MENU_OFFSET && menu_id != MENU_MDC_ID))
+            if (gInputBoxIndex == 0 || menu_id != MENU_OFFSET)
             {
                 goto Skip;
             }
@@ -2030,7 +1987,6 @@ Skip:
                 BACKLIGHT_TurnOn();
 
                 gInputBox[--gInputBoxIndex] = 10;
-                mdc_letter_cycle         = false;
                 gRequestDisplayScreen = DISPLAY_MENU;
             }
 
@@ -2105,7 +2061,6 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld)
             edit_index          = -1;
             edit_last_key       = 255;
             edit_char_index     = 0;
-            mdc_letter_cycle    = false;
         }
 
         // DTMF code editor: start the cursor at the end of the existing
@@ -2465,17 +2420,6 @@ static void MENU_Key_UP_DOWN(bool bKeyPressed, bool bKeyHeld, int8_t Direction)
         return;
     }
 
-    /* Handle MDC_ID hex digit cycling via arrow keys */
-    if (m == MENU_MDC_ID && gIsInSubMenu && gInputBoxIndex > 0)
-    {
-        /* Cycle the last entered digit through 0-F (hex) */
-        uint8_t last_digit_idx = gInputBoxIndex - 1;
-        uint8_t new_digit = (uint8_t)((gInputBox[last_digit_idx] + Direction + 16u) % 16u);
-        gInputBox[last_digit_idx] = new_digit;
-        gRequestDisplayScreen = DISPLAY_MENU;
-        return;
-    }
-
     switch (m)
     {
         case MENU_DEL_CH:
@@ -2648,63 +2592,6 @@ static void MENU_Key_DTMFCode(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
     gRequestDisplayScreen = DISPLAY_MENU;
 }
 
-// MDC-ID hex letter selector.
-//  - KEY_UP / KEY_DOWN (the '<' / '>' selectors) cycle the hex letter 'A'..'F'
-//    at the current input position; digits 0-9 are still entered directly
-//    with the number keys via INPUTBOX_Append().
-//  - First press places 'A' at the cursor, further presses cycle it
-//    (A->B->C->D->E->F->A). gInputBox stores nibble values 10..15 for A..F,
-//    which the MENU_MDC_ID renderer (ui/menu.c) prints as hex letters.
-//  - Like the digit path, the 4-nibble value auto-commits to
-//    gEeprom.MDC_UnitID (with EEPROM save) as soon as the 4th nibble lands.
-static void MENU_Key_MDC_ID_Letter(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
-{
-    if (!bKeyPressed || bKeyHeld)
-        return;
-
-    if (mdc_letter_cycle && gInputBoxIndex > 0)
-    {   // keep cycling the nibble placed by the previous UP/DOWN press
-        char *slot = &gInputBox[gInputBoxIndex - 1];
-
-        if (*slot < 10 || *slot > 15)
-            *slot = 10;                                     // not a letter -> 'A'
-        else if (Key == KEY_UP)
-            *slot = (*slot == 15) ? 10 : (char)(*slot + 1); // F -> wrap to A
-        else
-            *slot = (*slot == 10) ? 15 : (char)(*slot - 1); // A -> wrap to F
-    }
-    else
-    {   // first press: place 'A' at the current position
-        if (gInputBoxIndex >= 4)
-        {   // all four nibbles already entered
-            gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
-            return;
-        }
-
-        if (gInputBoxIndex == 0)
-            memset(gInputBox, 10, sizeof(gInputBox));       // same init as INPUTBOX_Append()
-
-        gInputBox[gInputBoxIndex++] = 10;                   // 'A'
-    }
-
-    mdc_letter_cycle = true;
-    gBeepToPlay      = BEEP_1KHZ_60MS_OPTIONAL;
-    gRequestDisplayScreen = DISPLAY_MENU;
-
-    if (gInputBoxIndex == 4)
-    {   // all four hex nibbles entered -> commit (mirrors the digit path)
-        uint32_t value = 0;
-        for (uint8_t i = 0; i < 4; i++)
-            value = (value * 16u) + (uint32_t)gInputBox[i];
-
-        gSubMenuSelection    = (int32_t)value;
-        gEeprom.MDC_UnitID   = (uint16_t)value;
-        gRequestSaveSettings = true;                        // immediate EEPROM save
-        gInputBoxIndex       = 0;
-        mdc_letter_cycle     = false;
-    }
-}
-
 void MENU_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
 {
     const int menu_id = UI_MENU_GetCurrentMenuId();
@@ -2732,14 +2619,6 @@ void MENU_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
             default:
                 break;
         }
-    }
-
-    // MDC-ID hex editor: UP/DOWN (the '<' / '>' selectors) choose A-F at the
-    // current input position instead of adjusting the value ±1.
-    if (gIsInSubMenu && menu_id == MENU_MDC_ID && (Key == KEY_UP || Key == KEY_DOWN))
-    {
-        MENU_Key_MDC_ID_Letter(Key, bKeyPressed, bKeyHeld);
-        return;
     }
 
     switch (Key)

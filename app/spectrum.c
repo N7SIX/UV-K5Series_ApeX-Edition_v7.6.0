@@ -1,4 +1,4 @@
-/* Copyright 2023 fagci
+﻿/* Copyright 2023 fagci
  * https://github.com/fagci
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -1786,34 +1786,6 @@ static void DrawRssiTriggerLevel(const uint8_t *topY)
     }
 }
 
-static void DrawTicks()
-{
-#if 0
-    uint32_t f = GetFStart();
-    uint32_t span = GetFEnd() - GetFStart();
-    uint32_t step = span / 128;
-    for (uint8_t i = 0; i < 128; i += (1 << settings.stepsCount))
-    {
-        f = GetFStart() + span * i / 128;
-        uint8_t barValue = 0b01000000;
-        (f % 10000) < step && (barValue |= 0b10000000);
-
-        gFrameBuffer[2][i] |= barValue;
-    }
-
-    // center
-    if (IsCenterMode())
-    {
-        gFrameBuffer[2][64] = 0b11000000;
-    }
-    else
-    {
-        gFrameBuffer[2][0] = 0b01000000;
-        gFrameBuffer[2][127] = 0b01000000;
-    }
-#endif
-}
-
 static void DrawArrow(uint8_t x)
 {
     // baselineY is the row where the base of the arrow sits (e.g., 47)
@@ -2053,7 +2025,6 @@ static void RenderSpectrum()
     uint8_t topY[128];
 
     BuildCurrentSpectrumTopY(topY);
-    DrawTicks();
     DrawArrow(arrowX);
     DrawSpectrumCurve(topY);
     DrawF(peak.f);
