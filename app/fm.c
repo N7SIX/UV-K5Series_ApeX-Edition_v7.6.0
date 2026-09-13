@@ -45,8 +45,9 @@ volatile int8_t   gFM_ScanState;
 bool              gFM_AutoScan;
 uint8_t           gFM_ChannelPosition;
 bool              gFM_FoundFrequency;
-bool              gFM_AutoScan;
 uint16_t          gFM_RestoreCountdown_10ms;
+// Doubts about whether this should be signed or not
+uint16_t          gFM_FrequencyDeviation;
 
 
 

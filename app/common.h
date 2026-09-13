@@ -30,9 +30,9 @@
 #ifndef APP_COMMON_H
 #define APP_COMMON_H
 
-#undef ENABLE_FMRADIO
-#undef ENABLE_NOAA
-// #define ENABLE_SCAN_RANGES 1
+// NOTE: Do NOT #undef/define feature macros here.
+// ENABLE_FMRADIO / ENABLE_NOAA / ENABLE_SCAN_RANGES come from the
+// Makefile (-D flags) and must stay consistent across all TUs.
 
 #include "functions.h"
 #include "core/settings.h"

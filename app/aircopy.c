@@ -46,6 +46,7 @@
 #include "ui/helper.h"
 #include "ui/inputbox.h"
 #include "ui/ui.h"
+#include <stddef.h>
 
 #ifdef ENABLE_FEAT_N7SIX_SCREENSHOT
 #include "screenshot.h"
@@ -57,6 +58,18 @@ AIRCOPY_State_t gAircopyState;
 uint16_t gAirCopyBlockNumber;
 uint16_t gErrorsDuringAirCopy;
 uint8_t gAirCopyIsSendMode;
+uint8_t gAircopyCurrentMapIndex;
+
+static const AIRCOPY_TransferMap_t gAircopyTransferMaps[AIRCOPY_NUM_BANKS] = {
+    { .total_blocks = 0x78 }  // 120 blocks, matches existing transfer limit
+};
+
+const AIRCOPY_TransferMap_t *AIRCOPY_GetCurrentMap(void)
+{
+    if (gAircopyCurrentMapIndex < AIRCOPY_NUM_BANKS)
+        return &gAircopyTransferMaps[gAircopyCurrentMapIndex];
+    return NULL;
+}
 
 uint16_t g_FSK_Buffer[36];
 

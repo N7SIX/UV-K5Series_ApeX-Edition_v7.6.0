@@ -17,6 +17,13 @@
 #ifndef SCREENSHOT_H
 #define SCREENSHOT_H
 
+#include <stdbool.h>
+
 void getScreenShot(bool force);
+
+// Compatibility wrappers: HEAD spectrum.c / welcome.c call these when
+// ENABLE_FEAT_N7SIX_SCREENSHOT=1, but only getScreenShot() exists.
+static inline void SCREENSHOT_Update(bool force) { getScreenShot(force); }
+static inline void SCREENSHOT_ParseInput(void) {}
 
 #endif

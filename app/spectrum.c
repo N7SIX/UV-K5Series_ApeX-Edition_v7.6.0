@@ -511,11 +511,6 @@ static void ResetPeak()
 }
 
 #ifdef ENABLE_FEAT_N7SIX_SPECTRUM
-    static void setTailFoundInterrupt()
-    {
-        BK4819_WriteRegister(BK4819_REG_3F, BK4819_REG_3F_CxCSS_TAIL);
-    }
-
     static bool checkIfTailFound()
     {
       uint16_t interrupt_status_bits;

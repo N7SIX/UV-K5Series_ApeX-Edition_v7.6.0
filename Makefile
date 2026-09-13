@@ -14,11 +14,11 @@ ENABLE_ALARM                    ?= 0
 ENABLE_TX1750                   ?= 0
 ENABLE_PWRON_PASSWORD           ?= 0
 ENABLE_DTMF_CALLING             ?= 0
-ENABLE_FLASHLIGHT               ?= 0
+ENABLE_FLASHLIGHT               ?= 1
 
 # ---- CUSTOM MODS ----
-ENABLE_SPECTRUM                 ?= 0
-ENABLE_WATERFALL                ?= 0
+ENABLE_SPECTRUM                 ?= 1
+ENABLE_WATERFALL                ?= 1
 ENABLE_BIG_FREQ                 ?= 1
 ENABLE_SMALL_BOLD               ?= 1
 ENABLE_CUSTOM_MENU_LAYOUT       ?= 1
@@ -40,14 +40,14 @@ ENABLE_COPY_CHAN_TO_VFO         ?= 0
 ENABLE_REDUCE_LOW_MID_TX_POWER  ?= 0
 ENABLE_BYP_RAW_DEMODULATORS     ?= 0
 ENABLE_BLMIN_TMP_OFF            ?= 0
-ENABLE_SCAN_RANGES              ?= 0
+ENABLE_SCAN_RANGES              ?= 1
 
 # ---- CONTRIB MODS ----
 
 # Thank you @markusb
 ENABLE_REGA                     ?= 0
 # Thank you @reppad
-	TARGET = ApeX
+TARGET = ApeX
 
 # ---- N7SIX MODS ----
 
@@ -55,7 +55,7 @@ ENABLE_FEAT_N7SIX               ?= 1
 ENABLE_FEAT_N7SIX_MEM           ?= 0
 ENABLE_FEAT_N7SIX_QRCODE        ?= 0
 ENABLE_FEAT_N7SIX_GAME          ?= 0
-ENABLE_FEAT_N7SIX_SCREENSHOT    ?= 0
+ENABLE_FEAT_N7SIX_SCREENSHOT    ?= 1
 ENABLE_FEAT_N7SIX_SPECTRUM      ?= 0
 ENABLE_FEAT_N7SIX_RX_TX_TIMER   ?= 0
 ENABLE_FEAT_N7SIX_CHARGING_C    ?= 0
@@ -303,20 +303,26 @@ CFLAGS += $(EXTRA_CFLAGS)
 
 # Use 2-byte wchar_t to match nano libc library compilation (fixes linker warnings)
 CFLAGS += -fshort-wchar -Wno-wchar-t-default
+# LTO type mismatch is a known false-positive with -ffat-lto-objects on GCC 14.x;
+# silence it entirely (warning, not just downgrade from error) so the LTO link
+# — which replays per-object -Werror — cannot fail on it.
+CFLAGS += -Wno-lto-type-mismatch
 
-ifeq ($(ENABLE_EXPERIMENTAL_CLFAGS),1)
-	# NOTE: -funroll-loops INCREASES flash size (trades size for speed).
-	# Keep fat LTO objects only; do not unroll loops on 64KB target.
-	CFLAGS += -ffat-lto-objects
-endif
+# -ffat-lto-objects is only meaningful when LTO is enabled; without it
+# this flag produces symbol-empty ELF objects with GCC 14.x (radio FM
+# symbols vanish despite -flto=auto being absent).
+# ENABLE_EXPERIMENTAL_CLFAGS controls other experimental flags only.
+
+# Always split sections so --gc-sections can drop unused code.
+CFLAGS += -ffunction-sections -fdata-sections
 
 ifeq ($(ENABLE_LTO),1)
-	CFLAGS += -flto=auto
+	CFLAGS += -flto=auto -ffat-lto-objects
 	# Unused sections are already handled globally above, but keep the
 	# fat objects so non-LTO tools (nm/size/objcopy) still work.
-else
-	# We get most of the space savings if LTO creates problems
-	CFLAGS += -ffunction-sections -fdata-sections
+	# Link must also run LTO, otherwise fat objects link without
+	# optimisation and the 64KB FLASH overflows.
+	LDFLAGS += -flto=auto
 endif
 
 # May cause unhelpful build failures
@@ -535,7 +541,7 @@ ifeq ($(ENABLE_EXTRA_UART_CMD),1)
 endif
 
 LDFLAGS =
-LDFLAGS += -z noexecstack -mcpu=cortex-m0 -nostartfiles -Wl,-T,config/firmware.ld -Wl,--gc-sections -fshort-wchar -Wl,--no-warn-mismatch
+LDFLAGS += -z noexecstack -mcpu=cortex-m0 -nostartfiles -Wl,-T,config/firmware.ld -Wl,--gc-sections -fshort-wchar -Wl,--no-warn-mismatch -Wno-lto-type-mismatch
 
 # Use newlib-nano instead of newlib
 LDFLAGS += --specs=nano.specs

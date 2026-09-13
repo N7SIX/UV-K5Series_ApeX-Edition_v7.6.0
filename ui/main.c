@@ -1469,9 +1469,9 @@ void UI_DisplayMain(void)
                 char Contact[16];
                 if (!gDTMF_InputMode) {
                     if (gDTMF_CallState == DTMF_CALL_STATE_CALL_OUT) {
-                        pPrintStr = DTMF_FindContact(gDTMF_String, Contact) ? Contact : gDTMF_String;
+                        pPrintStr = DTMF_FindContact(gDTMF_String, sizeof(gDTMF_String), Contact, sizeof(Contact)) ? Contact : gDTMF_String;
                     } else if (gDTMF_CallState == DTMF_CALL_STATE_RECEIVED || gDTMF_CallState == DTMF_CALL_STATE_RECEIVED_STAY){
-                        pPrintStr = DTMF_FindContact(gDTMF_Callee, Contact) ? Contact : gDTMF_Callee;
+                        pPrintStr = DTMF_FindContact(gDTMF_Callee, sizeof(gDTMF_Callee), Contact, sizeof(Contact)) ? Contact : gDTMF_Callee;
                     }else if (gDTMF_IsTx) {
                         pPrintStr = gDTMF_String;
                     }
@@ -1484,7 +1484,7 @@ void UI_DisplayMain(void)
                     if (gDTMF_CallState == DTMF_CALL_STATE_CALL_OUT) {
                         pPrintStr = (gDTMF_State == DTMF_STATE_CALL_OUT_RSP) ? "CALL OUT(RSP)" : "CALL OUT";
                     } else if (gDTMF_CallState == DTMF_CALL_STATE_RECEIVED || gDTMF_CallState == DTMF_CALL_STATE_RECEIVED_STAY) {
-                        sprintf(String, "CALL FRM:%s", (DTMF_FindContact(gDTMF_Caller, Contact)) ? Contact : gDTMF_Caller);
+                        sprintf(String, "CALL FRM:%s", (DTMF_FindContact(gDTMF_Caller, sizeof(gDTMF_Caller), Contact, sizeof(Contact))) ? Contact : gDTMF_Caller);
                         pPrintStr = String;
                     } else if (gDTMF_IsTx) {
                         pPrintStr = (gDTMF_State == DTMF_STATE_TX_SUCC) ? "DTMF TX(SUCC)" : "DTMF TX";

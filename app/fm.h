@@ -23,6 +23,7 @@
 
 #define FM_CHANNEL_UP   0x01
 #define FM_CHANNEL_DOWN 0xFF
+#define FM_CHANNELS_MAX 20
 
 enum {
     FM_SCAN_OFF = 0U,

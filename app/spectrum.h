@@ -44,7 +44,7 @@
 #include "../settings.h"
 #include "../ui/helper.h"
 
-static const uint8_t DrawingEndY  = 31;
+static const uint8_t DrawingEndY  = 40;
 static const uint8_t DrawingTopY  =  8;  // Reserve top 8px for frequency display (gFrameBuffer[0])
 
 static const uint8_t U8RssiMap[] = {

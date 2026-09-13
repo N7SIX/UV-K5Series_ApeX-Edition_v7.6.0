@@ -19,6 +19,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "settings.h"
 
 #ifdef ENABLE_FEAT_N7SIX
 /**
@@ -38,8 +39,7 @@ void UI_MAIN_SetRxLed(bool bOn);
  */
 static inline bool UI_MAIN_IsMainOnly(void)
 {
-    extern EEPROM_Config_t gEeprom;
-    return (gEeprom.DUAL_WATCH == DUAL_WATCH_OFF) && 
+    return (gEeprom.DUAL_WATCH == DUAL_WATCH_OFF) &&
            (gEeprom.CROSS_BAND_RX_TX == CROSS_BAND_OFF);
 }
 
