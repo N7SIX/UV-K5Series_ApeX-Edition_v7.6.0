@@ -17,7 +17,8 @@ ENABLE_DTMF_CALLING             ?= 0
 ENABLE_FLASHLIGHT               ?= 0
 
 # ---- CUSTOM MODS ----
-ENABLE_SPECTRUM                 ?= 1
+ENABLE_SPECTRUM                 ?= 0
+ENABLE_WATERFALL                ?= 0
 ENABLE_BIG_FREQ                 ?= 1
 ENABLE_SMALL_BOLD               ?= 1
 ENABLE_CUSTOM_MENU_LAYOUT       ?= 1

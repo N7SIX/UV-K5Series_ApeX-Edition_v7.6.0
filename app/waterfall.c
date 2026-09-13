@@ -7,7 +7,12 @@
  * gFrameBuffer[6] (page 7) = lines 56-63
  *
  * Rendering uses 4x4 Bayer ordered dither to simulate 16 gray levels.
+ *
+ * NOTE: This module is conditionally compiled with ENABLE_WATERFALL.
+ * Set ENABLE_WATERFALL=1 in Makefile to enable this feature.
  */
+
+#ifdef ENABLE_WATERFALL
 
 #include "waterfall.h"
 #include "driver/st7565.h"  /* gFrameBuffer */
@@ -257,3 +262,5 @@ void WATERFALL_Render(void)
         }
     }
 }
+
+#endif /* ENABLE_WATERFALL */
