@@ -1593,6 +1593,33 @@ void BK4819_StopScan(void)
     BK4819_Disable();
 }
 
+void BK4819_SetRxAudioGain(void)
+{
+    // REG_48 .. RX AF level
+    //
+    // <15:12> 11  ???  0 to 15
+    //
+    // <11:10> 0 AF Rx Gain-1
+    //         0 =   0dB
+    //         1 =  -6dB
+    //         2 = -12dB
+    //         3 = -18dB
+    //
+    // <9:4>   60 AF Rx Gain-2  -26dB ~ 5.5dB   0.5dB/step
+    //         63 = max
+    //          0 = mute
+    //
+    // <3:0>   15 AF DAC Gain (after Gain-1 and Gain-2) approx 2dB/step
+    //         15 = max
+    //          0 = min
+    //
+    BK4819_WriteRegister(BK4819_REG_48,
+        (11u << 12)                |     // ??? .. 0 to 15, doesn't seem to make any difference
+        ( 0u << 10)                |     // AF Rx Gain-1
+        (gEeprom.VOLUME_GAIN << 4) |     // AF Rx Gain-2
+        (gEeprom.DAC_GAIN    << 0));     // AF DAC Gain (after Gain-1 and Gain-2)
+}
+
 uint8_t BK4819_GetDTMF_5TONE_Code(void)
 {
     return (BK4819_ReadRegister(BK4819_REG_0B) >> 8) & 0x0F;
