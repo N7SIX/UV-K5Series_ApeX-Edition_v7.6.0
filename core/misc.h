@@ -85,6 +85,11 @@ extern ChannelAttributes_t gMR_ChannelAttributes[FREQ_CHANNEL_LAST + 1];
 // Extern declaration for gTxTimerCountdownAlert_500ms
 extern volatile uint16_t gTxTimerCountdownAlert_500ms;
 
+#ifdef ENABLE_FEAT_N7SIX_RX_TX_TIMER
+// RX timer counterpart of gTxTimerCountdownAlert_500ms (defined in core/misc.c)
+extern volatile uint16_t gRxTimerCountdown_500ms;
+#endif
+
 // Exclude list for memory/frequency/NOAA channels
 extern bool gMR_ChannelExclude[FREQ_CHANNEL_LAST + 1];
 

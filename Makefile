@@ -4,7 +4,7 @@
 # 1 = enable
 
 # ---- STOCK QUANSHENG FEATURES ----
-ENABLE_FMRADIO                  ?= 0
+ENABLE_FMRADIO                  ?= 1
 ENABLE_UART                     ?= 1
 ENABLE_AIRCOPY                  ?= 0
 ENABLE_NOAA                     ?= 0
@@ -14,14 +14,13 @@ ENABLE_ALARM                    ?= 0
 ENABLE_TX1750                   ?= 0
 ENABLE_PWRON_PASSWORD           ?= 0
 ENABLE_DTMF_CALLING             ?= 0
-ENABLE_FLASHLIGHT               ?= 0
+ENABLE_FLASHLIGHT               ?= 1
 
 # ---- CUSTOM MODS ----
-ENABLE_SPECTRUM                 ?= 1
-ENABLE_WATERFALL                ?= 0
+ENABLE_SPECTRUM                 ?= 0
 ENABLE_BIG_FREQ                 ?= 1
 ENABLE_SMALL_BOLD               ?= 1
-ENABLE_CUSTOM_MENU_LAYOUT       ?= 1
+ENABLE_CUSTOM_MENU_LAYOUT       ?= 0
 ENABLE_KEEP_MEM_NAME            ?= 0
 ENABLE_WIDE_RX                  ?= 0
 ENABLE_TX_WHEN_AM               ?= 0
@@ -31,9 +30,9 @@ ENABLE_BOOT_BEEPS               ?= 0
 ENABLE_SHOW_CHARGE_LEVEL        ?= 0
 ENABLE_REVERSE_BAT_SYMBOL       ?= 0
 ENABLE_NO_CODE_SCAN_TIMEOUT     ?= 0
-ENABLE_AM_FIX                   ?= 0
+ENABLE_AM_FIX                   ?= 1
 ENABLE_SQUELCH_MORE_SENSITIVE   ?= 0
-ENABLE_FASTER_CHANNEL_SCAN      ?= 0
+ENABLE_FASTER_CHANNEL_SCAN      ?= 1
 ENABLE_RSSI_BAR                 ?= 1
 ENABLE_AUDIO_BAR                ?= 1
 ENABLE_COPY_CHAN_TO_VFO         ?= 0
@@ -57,15 +56,15 @@ ENABLE_FEAT_N7SIX_QRCODE        ?= 0
 ENABLE_FEAT_N7SIX_GAME          ?= 0
 ENABLE_FEAT_N7SIX_SCREENSHOT    ?= 0
 ENABLE_FEAT_N7SIX_SPECTRUM      ?= 0
-ENABLE_FEAT_N7SIX_RX_TX_TIMER   ?= 0
+ENABLE_FEAT_N7SIX_RX_TX_TIMER   ?= 1
 ENABLE_FEAT_N7SIX_CHARGING_C    ?= 0
 ENABLE_FEAT_N7SIX_SLEEP         ?= 0
 ENABLE_FEAT_N7SIX_RESUME_STATE  ?= 0
 ENABLE_FEAT_N7SIX_NARROWER      ?= 0
 ENABLE_FEAT_N7SIX_INV           ?= 0
-ENABLE_FEAT_N7SIX_CTR           ?= 0
+ENABLE_FEAT_N7SIX_CTR           ?= 1
 ENABLE_FEAT_N7SIX_RESCUE_OPS    ?= 0
-ENABLE_FEAT_N7SIX_VOL           ?= 0
+ENABLE_FEAT_N7SIX_VOL           ?= 1
 ENABLE_FEAT_N7SIX_RESET_CHANNEL ?= 0
 ENABLE_FEAT_N7SIX_PMR           ?= 0
 ENABLE_FEAT_N7SIX_GMRS_FRS_MURS	?= 0
@@ -83,7 +82,7 @@ ENABLE_SWD                      ?= 0
 ENABLE_OVERLAY                  ?= 0
 ENABLE_LTO                      ?= 1
 ENABLE_EXPERIMENTAL_CFLAGS      ?= 1
-ENABLE_EXTRA_UART_CMD           ?= 1   # CHIRP needs 0x052F (session init) -- default ON
+ENABLE_EXTRA_UART_CMD           ?= 0   # CHIRP needs 0x052F (session init) -- default ON
 # H2 watchdog (driver/system.c WWDT driver). Default OFF: the DP32G030 WWDT register
 # map is NOT documented in the BSP/hardware .def files; the base address in
 # driver/system.h must be validated on real hardware (OpenOCD `mdw 0x40002000`)
@@ -666,10 +665,8 @@ system/version.o: .FORCE
 $(TARGET): $(OBJS)
 	$(LD) $(LDFLAGS) $^ -o $@ $(LIBS)
 
-bsp/dp32g030/%.h: hardware/dp32g030/%.def
-	@echo "NOTE: header generation from .def files is disabled (headers are checked in, not generated)"
-	@echo "      To enable: install the Python generator and uncomment the recipe below."
-	@# $(MY_PYTHON) tools/gen_headers.py $< $@
+# BSP headers are checked in and authoritative; do not regenerate.
+# If a header is missing, restore it from git — do not use the .def files.
 
 
 # Ensure printf.o depends on config/printf_config.h

@@ -18,6 +18,8 @@
 
 #include "ui/main_rssi.h"
 
+#include <string.h>
+
 #include "driver/bk4819.h"
 #include "driver/st7565.h"
 #include "misc.h"

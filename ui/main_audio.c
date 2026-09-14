@@ -18,18 +18,27 @@
 
 #include "ui/main_audio.h"
 
-#include "driver/bk4819.h"
-#include "driver/st7565.h"
+#include <string.h>
+
+#include "app/dtmf.h"
 #include "bitmaps.h"
 #include "board.h"
+#include "driver/bk4819.h"
+#include "driver/st7565.h"
 #include "misc.h"
+#include "radio/functions.h"
 #include "ui/helper.h"
+#include "ui/main_rx_led.h"
+#include "ui/ui.h"
 #include "audio.h"
 
 /**
  * @brief Smooth the audio level to reduce flicker.
  */
 static uint8_t barsOld = 0;
+
+/** Pixel-width table: index = log2 level, value = bar width in px. */
+static const uint8_t barsList[] = {0, 0, 0, 1, 2, 3, 5, 7, 9, 12, 15, 18, 21, 25, 25, 25};
 
 /**
  * @brief Simple log2 approximation.
@@ -63,12 +72,11 @@ static uint8_t SmoothAudioLevel(uint8_t newLevel, uint8_t oldLevel)
  */
 static void DrawLevelBar(uint8_t x, uint8_t line, uint8_t bars, uint8_t maxWidth)
 {
-    const uint8_t barsList[] = {0, 0, 0, 1, 2, 3, 5, 7, 9, 12, 15, 18, 21, 25, 25, 25};
     uint8_t width = (bars < ARRAY_SIZE(barsList)) ? barsList[bars] : 25;
     if (width > maxWidth) width = maxWidth;
     
     for (uint8_t i = 0; i < width; i++) {
-        pLine[line][x + i] |= 0x01;
+        gFrameBuffer[line][x + i] |= 0x01;
     }
 }
 

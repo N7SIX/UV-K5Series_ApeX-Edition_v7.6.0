@@ -17,6 +17,10 @@
 #include "../bsp/dp32g030/crc.h"
 #include "crc.h"
 
+// __attribute__((used)): GCC 15.x LTO + --gc-sections drops these cross-module
+// functions (referenced only from driver/uart.c / app/aircopy.c) -> link-time
+// "undefined reference to CRC_Init/CRC_Calculate". Keep them emitted.
+__attribute__((used))
 void CRC_Init(void)
 {
     CRC_CR = 0
@@ -31,6 +35,7 @@ void CRC_Init(void)
     CRC_IV = 0;
 }
 
+__attribute__((used))
 uint16_t CRC_Calculate(const void *pBuffer, uint16_t Size)
 {
     const uint8_t *pData = (const uint8_t *)pBuffer;
