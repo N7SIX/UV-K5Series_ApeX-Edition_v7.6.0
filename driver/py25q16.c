@@ -17,11 +17,18 @@
 #include "py25q16.h"
 #include <string.h>
 
+// NOTE: This is a stub. The UV-K5/K5(8)/K6 boards have no external SPI NOR
+// flash wired to the MCU — the PY25Q16 driver in upstream trees talks to a
+// chip this hardware does not have. Callers must therefore behave as if the
+// storage is ERASED. A NOR flash chip in erased state reads back 0xFF, but
+// every consumer of this driver (welcome strings, spectrum settings) treats
+// the data as NUL-terminated C strings / numeric defaults, so returning 0xFF
+// produces unterminated strings and garbage on screen. Filling with 0x00
+// models "empty" correctly for all current callers.
 void PY25Q16_ReadBuffer(uint32_t Address, void *pBuffer, uint32_t Size)
 {
     (void)Address;
-    (void)Size;
-    memset(pBuffer, 0xFF, Size);
+    memset(pBuffer, 0x00, Size);
 }
 
 void PY25Q16_WriteBuffer(uint32_t Address, const void *pBuffer, uint32_t Size, bool EraseFirst)

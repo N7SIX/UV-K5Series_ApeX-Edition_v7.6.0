@@ -226,7 +226,6 @@ uint8_t cmds[] = {
         return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
     }
 
-    #if !defined(ENABLE_SPECTRUM) || !defined(ENABLE_FMRADIO)
     void ST7565_Gauge(uint8_t line, uint8_t min, uint8_t max, uint8_t value)
     {
         gFrameBuffer[line][54] = 0x0c;
@@ -241,7 +240,6 @@ uint8_t cmds[] = {
             gFrameBuffer[line][i] = (i <= filled) ? 0x2d : 0x21;
         }
     }
-    #endif
 #endif
     
 void ST7565_Init(void)

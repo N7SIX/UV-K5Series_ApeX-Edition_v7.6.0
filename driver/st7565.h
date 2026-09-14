@@ -45,11 +45,10 @@ void ST7565_WriteByte(uint8_t Value);
     #if defined(ENABLE_FEAT_N7SIX_CTR) || defined(ENABLE_FEAT_N7SIX_INV)
     void ST7565_ContrastAndInv(void);
     #endif
-    #if !defined(ENABLE_SPECTRUM) || !defined(ENABLE_FMRADIO)
     void ST7565_Gauge(uint8_t line, uint8_t min, uint8_t max, uint8_t value);
-    #endif
     int16_t map(int16_t x, int16_t in_min, int16_t in_max, int16_t out_min, int16_t out_max);
-#endif
 
 #endif
+
+#endif /* DRIVER_ST7565_H */
 

@@ -14,11 +14,11 @@ ENABLE_ALARM                    ?= 0
 ENABLE_TX1750                   ?= 0
 ENABLE_PWRON_PASSWORD           ?= 0
 ENABLE_DTMF_CALLING             ?= 0
-ENABLE_FLASHLIGHT               ?= 1
+ENABLE_FLASHLIGHT               ?= 0
 
 # ---- CUSTOM MODS ----
 ENABLE_SPECTRUM                 ?= 1
-ENABLE_WATERFALL                ?= 1
+ENABLE_WATERFALL                ?= 0
 ENABLE_BIG_FREQ                 ?= 1
 ENABLE_SMALL_BOLD               ?= 1
 ENABLE_CUSTOM_MENU_LAYOUT       ?= 1
@@ -55,7 +55,7 @@ ENABLE_FEAT_N7SIX               ?= 1
 ENABLE_FEAT_N7SIX_MEM           ?= 0
 ENABLE_FEAT_N7SIX_QRCODE        ?= 0
 ENABLE_FEAT_N7SIX_GAME          ?= 0
-ENABLE_FEAT_N7SIX_SCREENSHOT    ?= 1
+ENABLE_FEAT_N7SIX_SCREENSHOT    ?= 0
 ENABLE_FEAT_N7SIX_SPECTRUM      ?= 0
 ENABLE_FEAT_N7SIX_RX_TX_TIMER   ?= 0
 ENABLE_FEAT_N7SIX_CHARGING_C    ?= 0
