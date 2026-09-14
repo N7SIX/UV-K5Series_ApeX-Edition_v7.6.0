@@ -62,7 +62,7 @@ ENABLE_FEAT_N7SIX_SLEEP         ?= 0
 ENABLE_FEAT_N7SIX_RESUME_STATE  ?= 0
 ENABLE_FEAT_N7SIX_NARROWER      ?= 0
 ENABLE_FEAT_N7SIX_INV           ?= 0
-ENABLE_FEAT_N7SIX_CTR           ?= 1
+ENABLE_FEAT_N7SIX_CTR           ?= 0
 ENABLE_FEAT_N7SIX_RESCUE_OPS    ?= 0
 ENABLE_FEAT_N7SIX_VOL           ?= 1
 ENABLE_FEAT_N7SIX_RESET_CHANNEL ?= 0
@@ -131,7 +131,7 @@ ifeq ($(ENABLE_FMRADIO),1)
 	OBJS += driver/bk1080.o
 endif
 OBJS += driver/bk4819.o
-ifeq ($(filter 1,$(ENABLE_AIRCOPY) $(ENABLE_UART)),1)
+ifneq ($(filter 1,$(ENABLE_AIRCOPY) $(ENABLE_UART)),)
 	OBJS += driver/crc.o
 endif
 OBJS += driver/eeprom.o
