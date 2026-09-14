@@ -110,7 +110,11 @@ void REGA_TransmitZvei(const uint16_t tones[],const char message[])
     // Copy the message text
     strncpy(rega_message,message,16);
     // Trigger the display
+#ifdef ENABLE_REGA
     gScreenToDisplay = DISPLAY_REGA;
+#else
+    gScreenToDisplay = DISPLAY_MAIN;
+#endif
 
     // Flash the green LED twice
     BK4819_ToggleGpioOut(BK4819_GPIO6_PIN2_GREEN, true);

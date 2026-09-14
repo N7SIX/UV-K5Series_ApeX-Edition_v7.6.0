@@ -315,6 +315,14 @@ void UI_DrawLineBuffer(uint8_t (*buffer)[128], int16_t x1, int16_t y1, int16_t x
     }
 }
 
+void UI_DrawRectangleBuffer(uint8_t (*buffer)[128], int16_t x1, int16_t y1, int16_t x2, int16_t y2, bool black)
+{
+    UI_DrawLineBuffer(buffer, x1, y1, x1, y2, black);
+    UI_DrawLineBuffer(buffer, x1, y1, x2, y1, black);
+    UI_DrawLineBuffer(buffer, x2, y1, x2, y2, black);
+    UI_DrawLineBuffer(buffer, x1, y2, x2, y2, black);
+}
+
 void UI_DisplayPopup(const char *string)
 {
     UI_DisplayClear();

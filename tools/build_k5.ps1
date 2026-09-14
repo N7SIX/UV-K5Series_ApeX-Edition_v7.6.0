@@ -23,7 +23,7 @@ $defines = @(
     "-DAUTHOR_STRING=`"EGZUMER+N7SIX`"","-DVERSION_STRING=`"v7.6.10`""
 )
 
-$warnings = @('-Wall','-Wextra','-Werror','-Wno-wchar-t-default')
+$warnings = @('-Wall','-Wextra','-Werror')
 
 $cflags = @(
     '-Oz','-mcpu=cortex-m0','-fshort-enums','-fno-delete-null-pointer-checks',

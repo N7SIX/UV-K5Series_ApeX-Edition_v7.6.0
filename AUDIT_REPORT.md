@@ -317,3 +317,49 @@ the committed source in CI (`.github/workflows/` exists but contains no usable w
 verify on the GitHub side).
 
 **Fix:** delete line 49 (and the stray comment above it suggesting an accidental paste).
+
+---
+
+## 9. Fix-status addendum — 2026-09-14
+
+Build verification and remediation performed on 2026-09-14 after the original static audit:
+
+- **Per-TU compile pass (`.mapwork/audit_build.cmd`, GCC 14.3): 72 objects, 0 errors, 0 warnings**
+  with the project's exact flags (`-Oz -Wall -Wextra -Werror -mcpu=cortex-m0 -std=c2x`) plus the
+  default feature set (`ENABLE_FEAT_N7SIX`, `ENABLE_SPECTRUM`, `ENABLE_UART`, `ENABLE_SCAN_RANGES`,
+  `ENABLE_CUSTOM_MENU_LAYOUT`, `ENABLE_BIG_FREQ`, `ENABLE_SMALL_BOLD`, screenshot off, ...).
+- **End-to-end `make` via `Dockerfile` (arm-none-eabi-gcc in Docker): clean compile + link + pack**
+  → produces `build/ApeX/n7six.ApeX-k5.<ver>.packed.bin`.
+
+### Fix status
+
+| ID | Finding | Status |
+|----|---------|--------|
+| B1 | Makefile stray tab before `TARGET` | **Fixed** — tab removed |
+| B2 | `scheduler.c` rvalue decrement + `ALERT_TOT` undefined | **Fixed** — expanded inline check + `#ifndef ALERT_TOT` fallback |
+| B3 | MDC-1200 half-wired, missing symbols | **Fixed** — orphan references removed; no `ui/mdc.o`, no missing symbols |
+| H1 | UART `CMD_051B`/`CMD_051D` OOB read/write | **Fixed** — `Size` clamped to reply buffer + EEPROM size; `CMD_051D` clamped to 248B and writes bounded to 0x2000; reply header size made consistent |
+| H2 | No watchdog | **Partially fixed — opt-in** `ENABLE_WATCHDOG ?= 0` (default OFF). Driver implemented (`driver/system.c`), init+feed wired into `system/main.c`. **Deliberately NOT enabled by default**: the DP32G030 WWDT register map is undocumented in the BSP/`.def` files; `HRM_start.S` `HandlerHardFault` is `b .` (infinite loop), so feeding a wrong base address would brick the radio. Validate `WWDT_BASE_ADDR` on real hardware (OpenOCD `mdw 0x40002000`) before setting `ENABLE_WATCHDOG=1`. |
+| H3 | No VCS / stale binaries | **Open** — tree is now a git repo (`master`, tracked HEAD) with `.gitattributes` (LF normalization); shipped `build/ApeX` binaries still must be rebuilt from HEAD and diffed |
+| M1 | `ENABLE_EXTRA_UART_CMD` never defined ⇒ 0x052F out | **Fixed** — option added, default `1` |
+| M2 | CRC filter `filter $(A) $(U),1` logic | **Fixed** — written as `filter 1,$(ENABLE_AIRCOPY) $(ENABLE_UART)` |
+| M3 | `python3` hardcoded in pack step | **Fixed** — `$(MY_PYTHON)` used |
+| M4 | `debug`/`flash` targets (hardcoded `firmware.bin`, `/opt/openocd`) | **Fixed** — use `$(TARGET).bin` + `openocd`; explicit Windows-guard message |
+| M5 | DTMF stack writes at capacity / unterminated | **Fixed** — `DTMF_ValidateCodes` forces NUL termination + NULL/0-length guards; all `sprintf` → `snprintf` |
+| M6 | `ENABLE_EXPERIMENTAL_CLFAGS` typo | **Fixed** — renamed to `ENABLE_EXPERIMENTAL_CFLAGS` |
+| M7 | Empty BSP header-generation recipe | **Fixed** — recipe now prints a clear NOTE (checked-in headers) |
+| M8 | `tools/eeprom_selective_sync.py` region map | **Open** — tool region table still needs re-derivation |
+| L1–L7 | Hygiene (root clutter, docs, UART ops, etc.) | **Open** — documented; no functional impact |
+| — | Version strings undefined (compile blocker discovered in build) | **Fixed** — `system/version.c` fallback `#ifndef` defines; build-defines from Makefile |
+| — | `system/screenshot.c` rvalue decrement + implicit `UART_IsCableConnected` | **Fixed** — guarded under `ENABLE_FEAT_N7SIX_SCREENSHOT`, added declaration |
+| — | `ui/main_rx_led.c` duplicate dead `static`s | **Fixed** — removed |
+| — | `app/rega.c` `DISPLAY_REGA` undeclared in `ENABLE_REGA=0` builds | **Fixed** — `#ifdef ENABLE_REGA` guard |
+| — | `app/breakout.c` `UI_DrawRectangleBuffer` missing | **Fixed** — implemented in `ui/helper.c` + declaration in `ui/helper.h` |
+| — | `radio/radio.c:771` `SQL_TONE` undefined | **Fixed** — `#ifdef SQL_TONE` with 550 fallback |
+
+### Remaining risks / next steps
+
+1. **WWDT hardware validation** (see H2 row) before enabling `ENABLE_WATCHDOG=1`.
+2. **UART regression on hardware**: k5prog/CHIRP read/write, session init (0x052F), RSSI commands.
+3. **M8** EEPROM sync tool region table; **H3** binary↔source traceability via CI rebuild.
+4. Band-edge TX, TOT alert timing and spectrum soak tests (P2 in §7) still need to be run on silicon.

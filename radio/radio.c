@@ -768,8 +768,13 @@ void RADIO_SetupRegisters(bool switchToForeground)
             {
                 default:
                 case CODE_TYPE_OFF:
+#ifdef SQL_TONE
                     BK4819_SetCTCSSFrequency(SQL_TONE);
                     BK4819_SetTailDetection(SQL_TONE); // Default 550 = QS's 55Hz tone method
+#else
+                    BK4819_SetCTCSSFrequency(550);
+                    BK4819_SetTailDetection(550); // Default 550 = QS's 55Hz tone method
+#endif
 
                     InterruptMask = BK4819_REG_3F_CxCSS_TAIL | BK4819_REG_3F_SQUELCH_FOUND | BK4819_REG_3F_SQUELCH_LOST;
                     break;

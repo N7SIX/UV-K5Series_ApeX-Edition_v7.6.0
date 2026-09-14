@@ -1,0 +1,8 @@
+# Normalize line endings: firmware sources are LF in the repo so Docker/Linux
+# builds never see stray CR or collapsed-line artifacts.
+* text=auto eol=lf
+*.bin binary
+*.elf binary
+*.packed.bin binary
+*.o binary
+*.d text eol=lf

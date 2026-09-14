@@ -116,7 +116,16 @@ bool DTMF_ValidateCodes(char *pCode, const unsigned int size)
 {
     unsigned int i;
 
-    if (pCode[0] == 0xFF || pCode[0] == 0)
+    // Harden (M5): never leave the caller's buffer unterminated, even when
+    // all `size` bytes are valid DTMF chars. Callers sprintf() these buffers
+    // (gDTMF_String[15], ANI_DTMF_ID[8]) into char String[23]; without the
+    // forced terminator a crafted/corrupt EEPROM yields an OOB stack read.
+    if (pCode == NULL || size == 0)
+        return false;
+
+    pCode[size - 1] = 0;
+
+    if (pCode[0] == (char)0xFF || pCode[0] == 0)
         return false;
 
     for (i = 0; i < size; i++)
@@ -130,6 +139,12 @@ bool DTMF_ValidateCodes(char *pCode, const unsigned int size)
         if ((pCode[i] < '0' || pCode[i] > '9') && (pCode[i] < 'A' || pCode[i] > 'D') && pCode[i] != '*' && pCode[i] != '#')
             return false;
     }
+
+    // --- M5 fix: force NUL termination even when all size bytes are valid DTMF chars ---
+    // Without this, a crafted/corrupt EEPROM holding exactly 'size' valid chars with
+    // no terminator would produce an unterminated string feeding sprintf → overflow.
+    if (size > 0)
+        pCode[size - 1] = 0;
 
     return true;
 }
@@ -351,7 +366,7 @@ void DTMF_HandleRequest(void)
         gDTMF_RX_index >= 9)
     {   // waiting for a reply
 
-        sprintf(String, "%s%c%s", gDTMF_String, gEeprom.DTMF_SEPARATE_CODE, "AAAAA");
+        snprintf(String, sizeof(String), "%s%c%s", gDTMF_String, gEeprom.DTMF_SEPARATE_CODE, "AAAAA");
 
         Offset = gDTMF_RX_index - strlen(String);
 
@@ -373,7 +388,7 @@ void DTMF_HandleRequest(void)
 
         gDTMF_IsGroupCall = false;
 
-        sprintf(String, "%s%c", gEeprom.ANI_DTMF_ID, gEeprom.DTMF_SEPARATE_CODE);
+        snprintf(String, sizeof(String), "%s%c", gEeprom.ANI_DTMF_ID, gEeprom.DTMF_SEPARATE_CODE);
 
         Offset = gDTMF_RX_index - strlen(String) - 3;
 
@@ -430,7 +445,9 @@ void DTMF_Reply(void)
 #ifdef ENABLE_DTMF_CALLING
             if (gDTMF_CallMode != DTMF_CALL_MODE_DTMF)
             {   // append our ID code onto the end of the DTMF code to send
-                sprintf(String, "%s%c%s", gDTMF_String, gEeprom.DTMF_SEPARATE_CODE, gEeprom.ANI_DTMF_ID);
+                // M5: snprintf -- gDTMF_String/ANI_DTMF_ID are NUL-capped by
+                // DTMF_ValidateCodes, but never trust EEPROM content blindly.
+                snprintf(String, sizeof(String), "%s%c%s", gDTMF_String, gEeprom.DTMF_SEPARATE_CODE, gEeprom.ANI_DTMF_ID);
                 pString = String;
             }
             else
@@ -446,7 +463,7 @@ void DTMF_Reply(void)
             break;
 
         case DTMF_REPLY_AAAAA:
-            sprintf(String, "%s%c%s", gEeprom.ANI_DTMF_ID, gEeprom.DTMF_SEPARATE_CODE, "AAAAA");
+            snprintf(String, sizeof(String), "%s%c%s", gEeprom.ANI_DTMF_ID, gEeprom.DTMF_SEPARATE_CODE, "AAAAA");
             pString = String;
             break;
 #endif

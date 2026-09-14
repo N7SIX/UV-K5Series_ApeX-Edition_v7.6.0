@@ -39,7 +39,12 @@ bool              gScanKeepResult;
 bool              gScanPauseMode;
 
 #ifdef ENABLE_SCAN_RANGES
+// __attribute__((used)): force emission under GCC 14.x LTO + --gc-sections,
+// which otherwise drops these cross-module globals -> link-time
+// "undefined reference to gScanRangeStart/gScanRangeStop".
+__attribute__((used))
 uint32_t          gScanRangeStart;
+__attribute__((used))
 uint32_t          gScanRangeStop;
 #endif
 

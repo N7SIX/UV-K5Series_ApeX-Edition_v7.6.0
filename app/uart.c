@@ -286,10 +286,22 @@ static void CMD_051B(const uint8_t *pBuffer)
     if (bHasCustomAesKey)
         bLocked = gIsLocked;
 
-    if (!bLocked)
-        EEPROM_ReadBuffer(pCmd->Offset, Reply.Data.Data, pCmd->Size);
+    // --- H1 fix: bounds-check attacker-controlled Size and Offset ---
+    // pCmd->Size is a uint8_t from the UART frame (0..255). Clamp to the 128-byte
+    // stack buffer and to the EEPROM size so EEPROM_ReadBuffer can never overrun.
+    uint16_t safeSize = pCmd->Size;
+    if (safeSize > sizeof(Reply.Data.Data))
+        safeSize = (uint16_t)sizeof(Reply.Data.Data);
+    if ((uint32_t)pCmd->Offset + safeSize > 0x2000)
+        safeSize = (uint16_t)(0x2000 - pCmd->Offset);
 
-    SendReply(&Reply, pCmd->Size + 8);
+    if (!bLocked)
+        EEPROM_ReadBuffer(pCmd->Offset, Reply.Data.Data, safeSize);
+
+    // Header must match the actual number of payload bytes sent (was +8, now +4
+    // after the Size clamp; CHIRP parses the header).
+    Reply.Header.Size = (uint16_t)(safeSize + 4);
+    SendReply(&Reply, safeSize + 8);
 }
 
 // write eeprom
@@ -320,9 +332,22 @@ static void CMD_051D(const uint8_t *pBuffer)
     if (!bIsLocked)
     {
         unsigned int i;
-        for (i = 0; i < (pCmd->Size / 8); i++)
+        // --- H1 fix: bounds-check the 256-byte command buffer ---
+        // CMD_051D_t::Data is declared as uint8_t Data[0] (flexible array member)
+        // but the actual UART_Command.Buffer is 256 bytes. pCmd->Size can be up to
+        // 255; the loop accesses &pCmd->Data[i*8] up to byte 259 for Size=248,
+        // so clamp to 248 (31 pages × 8 bytes) to stay within the buffer.
+        uint16_t safe_size = pCmd->Size;
+        if (safe_size > 248U)
+            safe_size = 248U;
+
+        for (i = 0; i < (safe_size / 8); i++)
         {
             const uint16_t Offset = pCmd->Offset + (i * 8U);
+
+            // Also clamp each write to EEPROM size
+            if ((uint32_t)Offset + 8U > 0x2000U)
+                break;
 
             if (Offset >= 0x0F30 && Offset < 0x0F40)
                 if (!gIsLocked)

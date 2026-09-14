@@ -82,7 +82,14 @@ ENABLE_CLANG                    ?= 0
 ENABLE_SWD                      ?= 0
 ENABLE_OVERLAY                  ?= 0
 ENABLE_LTO                      ?= 1
-ENABLE_EXPERIMENTAL_CLFAGS      ?= 1
+ENABLE_EXPERIMENTAL_CFLAGS      ?= 1
+ENABLE_EXTRA_UART_CMD           ?= 1   # CHIRP needs 0x052F (session init) -- default ON
+# H2 watchdog (driver/system.c WWDT driver). Default OFF: the DP32G030 WWDT register
+# map is NOT documented in the BSP/hardware .def files; the base address in
+# driver/system.h must be validated on real hardware (OpenOCD `mdw 0x40002000`)
+# BEFORE enabling -- a wrong base would BusFault on every feed (HardFault=infinite
+# loop in system/start.S) and effectively brick the radio.
+ENABLE_WATCHDOG                  ?= 0
 
 #############################################################
 
@@ -125,7 +132,7 @@ ifeq ($(ENABLE_FMRADIO),1)
 	OBJS += driver/bk1080.o
 endif
 OBJS += driver/bk4819.o
-ifeq ($(filter $(ENABLE_AIRCOPY) $(ENABLE_UART),1),1)
+ifeq ($(filter 1,$(ENABLE_AIRCOPY) $(ENABLE_UART)),1)
 	OBJS += driver/crc.o
 endif
 OBJS += driver/eeprom.o
@@ -302,16 +309,16 @@ endif
 CFLAGS += $(EXTRA_CFLAGS)
 
 # Use 2-byte wchar_t to match nano libc library compilation (fixes linker warnings)
-CFLAGS += -fshort-wchar -Wno-wchar-t-default
+CFLAGS += -fshort-wchar
 # LTO type mismatch is a known false-positive with -ffat-lto-objects on GCC 14.x;
 # silence it entirely (warning, not just downgrade from error) so the LTO link
-# — which replays per-object -Werror — cannot fail on it.
+# -- which replays per-object -Werror -- cannot fail on it.
 CFLAGS += -Wno-lto-type-mismatch
 
 # -ffat-lto-objects is only meaningful when LTO is enabled; without it
 # this flag produces symbol-empty ELF objects with GCC 14.x (radio FM
 # symbols vanish despite -flto=auto being absent).
-# ENABLE_EXPERIMENTAL_CLFAGS controls other experimental flags only.
+# ENABLE_EXPERIMENTAL_CFLAGS controls other experimental flags only.
 
 # Always split sections so --gc-sections can drop unused code.
 CFLAGS += -ffunction-sections -fdata-sections
@@ -539,6 +546,9 @@ endif
 ifeq ($(ENABLE_EXTRA_UART_CMD),1)
 	CFLAGS  += -DENABLE_EXTRA_UART_CMD
 endif
+ifeq ($(ENABLE_WATCHDOG),1)
+	CFLAGS  += -DENABLE_WATCHDOG
+endif
 
 LDFLAGS =
 LDFLAGS += -z noexecstack -mcpu=cortex-m0 -nostartfiles -Wl,-T,config/firmware.ld -Wl,--gc-sections -fshort-wchar -Wl,--no-warn-mismatch -Wno-lto-type-mismatch
@@ -626,7 +636,7 @@ echo "Done: ApeX Edition, Successful!"'
 
 ifdef MY_PYTHON
 ifeq ($(HAS_CRCMOD),)
-	python3 config/fw-pack.py build/ApeX/n7six.ApeX-k5.$(VERSION_STRING).bin $(EDITION_STRING) $(VERSION_STRING) build/ApeX/n7six.ApeX-k5.$(VERSION_STRING).packed.bin
+	$(MY_PYTHON) config/fw-pack.py build/ApeX/n7six.ApeX-k5.$(VERSION_STRING).bin $(EDITION_STRING) $(VERSION_STRING) build/ApeX/n7six.ApeX-k5.$(VERSION_STRING).packed.bin
 	@echo "Firmware packed: n7six.ApeX-k5.$(VERSION_STRING).packed.bin"
 endif
 else
@@ -634,10 +644,22 @@ else
 endif
 
 debug:
-	/opt/openocd/bin/openocd -c "bindto 0.0.0.0" -f interface/jlink.cfg -f config/dp32g030.cfg
+	@echo "NOTE: debug target requires Linux/Docker with OpenOCD + J-Link. Windows users: see README.md"
+	@if [ "$(OS)" != "Windows_NT" ]; then \
+		openocd -c "bindto 0.0.0.0" -f interface/jlink.cfg -f config/dp32g030.cfg; \
+	else \
+		echo "ERROR: debug target is Linux/Docker-only (OpenOCD + J-Link)."; \
+		exit 1; \
+	fi
 
 flash:
-	/opt/openocd/bin/openocd -c "bindto 0.0.0.0" -f interface/jlink.cfg -f config/dp32g030.cfg -c "write_image firmware.bin 0; shutdown;"
+	@echo "NOTE: flash target requires Linux/Docker with OpenOCD + J-Link. Windows users: see README.md"
+	@if [ "$(OS)" != "Windows_NT" ]; then \
+		openocd -c "bindto 0.0.0.0" -f interface/jlink.cfg -f config/dp32g030.cfg -c "write_image $(TARGET).bin 0; shutdown;"; \
+	else \
+		echo "ERROR: flash target is Linux/Docker-only (OpenOCD + J-Link)."; \
+		exit 1; \
+	fi
 
 system/version.o: .FORCE
 
@@ -645,6 +667,9 @@ $(TARGET): $(OBJS)
 	$(LD) $(LDFLAGS) $^ -o $@ $(LIBS)
 
 bsp/dp32g030/%.h: hardware/dp32g030/%.def
+	@echo "NOTE: header generation from .def files is disabled (headers are checked in, not generated)"
+	@echo "      To enable: install the Python generator and uncomment the recipe below."
+	@# $(MY_PYTHON) tools/gen_headers.py $< $@
 
 
 # Ensure printf.o depends on config/printf_config.h

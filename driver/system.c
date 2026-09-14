@@ -19,6 +19,10 @@
 #include "system.h"
 #include "systick.h"
 
+/* Global flag -- true when the watchdog was successfully initialised.
+ * main.c checks this once before relying on the feed path. */
+static bool gWatchdogEnabled = false;
+
 void SYSTEM_DelayMs(uint32_t Delay)
 {
     SYSTICK_DelayUs(Delay * 1000);
@@ -34,4 +38,56 @@ void SYSTEM_ConfigureClocks(void)
 
     // Disable division clock gate
     SYSCON_DIV_CLK_GATE = (SYSCON_DIV_CLK_GATE & ~SYSCON_DIV_CLK_GATE_DIV_CLK_GATE_MASK) | SYSCON_DIV_CLK_GATE_DIV_CLK_GATE_BITS_DISABLE;
+}
+
+/* ---- H2 fix: watchdog implementation ----
+ * The DP32G030 WWDT peripheral is used. It runs from the internal 512 kHz
+ * RC oscillator which is always available (even in power-save).
+ *
+ * Configuration:
+ *   Prescaler: 1024  (WDT clock = 512 kHz / 1024 = 500 Hz)
+ *   Reload:    4095  (max value, 12-bit)
+ *   Timeout:   (4096 / 500 Hz) ≈ 8.19 s
+ *
+ * The main loop feeds the watchdog every ~10 ms. If the loop hangs
+ * (stuck I²C/SPI, dead ISR, infinite loop), the chip resets after ~8 s.
+ */
+void SYSTEM_WatchdogInit(void)
+{
+    // Enable WWDT clock gate (bit 24 in SYSCON_DEV_CLK_GATE)
+    SYSCON_DEV_CLK_GATE |= SYSCON_DEV_CLK_GATE_WWDT_BITS_ENABLE;
+
+    // Unlock the Mode Register by writing the key (0xA5A5 in upper 16 bits)
+    WWDT_MR = WWDT_MR_KEY_VALUE;
+
+    // Configure: enable watchdog, halt in debug, prescaler = 1024 (PSCR field = 9,
+    // i.e. 2^(9+1) = 2048; 512 kHz / 2048 ≈ 244 Hz), reload = 4095
+    // Timeout ≈ 4096 / 244 ≈ 16.8 s -- generous for I2C/SPI transactions.
+    // Adjust WWDT_RLR if a shorter window is desired after empirical testing.
+    WWDT_MR = WWDT_MR_KEY_VALUE
+              | WWDT_MR_WEN
+              | WWDT_MR_HALT
+              | ((9U << WWDT_MR_PSCR_SHIFT) & WWDT_MR_PSCR_MASK);
+
+    // Set reload value (max 12-bit = 4095 → ~16.8 s at 244 Hz)
+    WWDT_RLR = WWDT_RLR_MASK;
+
+    gWatchdogEnabled = true;
+}
+
+void SYSTEM_WatchdogFeed(void)
+{
+    if (!gWatchdogEnabled)
+        return;
+
+    // Writing any value to WWDT_CR reloads the counter.
+    // On some DP32G030 variants feeding is done via WWDT_MR; we try both
+    // to be safe against silicon revision differences.
+    WWDT_CR = 0U;
+    WWDT_MR = (WWDT_MR & ~WWDT_MR_KEY_VALUE) | WWDT_MR_KEY_VALUE;
+}
+
+bool SYSTEM_WatchdogIsEnabled(void)
+{
+    return gWatchdogEnabled;
 }

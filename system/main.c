@@ -95,6 +95,15 @@ void Main(void)
     UART_Send(UART_Version, strlen(UART_Version));
 #endif
 
+    // ---- H2 fix: hardware watchdog (WWDT) ----
+    // Opt-in via ENABLE_WATCHDOG=1 in the Makefile. The DP32G030 WWDT register map
+    // is not documented in the BSP; validate the base address in driver/system.h on
+    // real hardware before enabling (see comment in the Makefile). Feeding must be
+    // done from the main loop only, never from an ISR.
+#ifdef ENABLE_WATCHDOG
+    SYSTEM_WatchdogInit();
+#endif
+
     // Not implementing authentic device checks
 
     memset(gDTMF_String, '-', sizeof(gDTMF_String));
@@ -363,8 +372,15 @@ void Main(void)
         }
         #endif
     #endif
-        
+
     while (true) {
+#ifdef ENABLE_WATCHDOG
+        // H2 fix: feed the watchdog on every main-loop iteration.
+        // If APP_Update() or any callback hangs (stuck I2C, dead ISR),
+        // the WWDT will reset the chip after the timeout window.
+        SYSTEM_WatchdogFeed();
+#endif
+
         APP_Update();
 
         if (gNextTimeslice) {

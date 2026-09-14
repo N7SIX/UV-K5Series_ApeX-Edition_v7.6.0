@@ -24,9 +24,8 @@
 #include "settings.h"
 #include "misc.h"
 
-// RX LED blink state
-static int8_t RxBlinkLed = 0;
-static int8_t RxBlinkLedCounter = 0;
+// RX LED blink state - consolidated in ui/main.c
+// (static variables removed: RxBlinkLed, RxBlinkLedCounter are defined in ui/main.c)
 
 /**
  * @brief Set RX LED state based on VFO position.

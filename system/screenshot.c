@@ -32,6 +32,7 @@ void getScreenShot(bool force)
     uint8_t acc = 0;
     uint8_t bitCount = 0;
 
+#ifdef ENABLE_FEAT_N7SIX_SCREENSHOT
     if (gUART_LockScreenshot > 0) // Lock screenshot if Chirp is in used
     {
         gUART_LockScreenshot--;
@@ -41,6 +42,7 @@ void getScreenShot(bool force)
     if (UART_IsCableConnected()) {
         keepAlive = 10;
     }
+#endif
 
     if (keepAlive > 0) {
         if (--keepAlive == 0) return;
