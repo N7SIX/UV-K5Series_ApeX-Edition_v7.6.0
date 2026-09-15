@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+  <meta http-equiv="Pragma" content="no-cache"/>
+  <meta http-equiv="Expires" content="0"/>
+  <title>UVTools Multi-Firmware Web Tool</title>
+  <link rel="icon" type="image/svg+xml" href="img/UVTools-favicon-color-v2.svg">
+  <link rel="preload" href="locales/en.json" as="fetch" type="application/json" crossorigin="anonymous">
+  <link rel="stylesheet" href="css/style.css?v=20260504" />
+</head>
+<body>
+  <main class="container">
+    <header class="header" role="banner">
+      <h1 id="title" class="h1">UVTools Multi-Firmware Web Tool</h1>
+      <div class="language-selector">
+        <label for="languageSelect" class="sr-only">Language</label>
+        <select id="languageSelect" aria-label="Language">
+          <option value="en">English</option>
+          <option value="fr">Français</option>
+          <option value="zh">中文</option>
+        </select>
+      </div>
+    </header>
+
+    <p class="subtitle" id="subtitle">Multi-firmware flasher and calibration manager via Web Serial API</p>
+
+    <section class="section profile-section" aria-labelledby="labelRadioProfile">
+      <label id="labelRadioProfile" for="radioProfile">Radio Family</label>
+      <select id="radioProfile" aria-describedby="profileHelp">
+        <option value="" selected>Select a radio family</option>
+        <option value="k5k6-v1">UV-K5/K6 Version 1</option>
+        <option value="k5k6-v2">UV-K5/K6 Version 2</option>
+        <option value="k1k5-v3">UV-K1 Series/K5 Version 3</option>
+      </select>
+      <span id="engineBadge" class="engine-badge engine-modern" aria-live="polite" hidden>Modern engine</span>
+      <p class="profile-help" id="profileHelp">Select a radio family or load firmware to auto-detect it.</p>
+    </section>
+
+    <!-- TABS -->
+    <div class="tabs" role="tablist">
+      <button class="tab active" role="tab" aria-selected="true" data-tab="flash" id="tabFlash">Flash Firmware</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="dump" id="tabDump">Dump Calibration</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="restore" id="tabRestore">Restore Calibration</button>
+    </div>
+
+    <!-- FLASH FIRMWARE TAB -->
+    <div class="tab-content active" id="flash-content" role="tabpanel">
+
+      <section class="section" id="firmwareFileSection" aria-labelledby="labelFirmwareFile">
+        <label id="labelFirmwareFile">Firmware File (.bin)</label>
+        <div class="file-input-wrapper">
+          <input type="file" id="firmwareFile" accept=".bin" />
+          <div class="file-input-label" id="fileLabel">
+            <span class="file-name" id="fileName">No file selected</span>
+            <span class="file-button" id="fileButton">Choose file</span>
+          </div>
+        </div>
+      </section>
+
+      <button id="flashBtn" disabled aria-live="polite">Flash firmware</button>
+    </div>
+
+    <!-- DUMP CALIBRATION TAB -->
+    <div class="tab-content" id="dump-content" role="tabpanel">
+      <section class="section">
+        <p class="tab-description" id="dumpDescription">
+          Extract calibration data from your radio. The connected radio is auto-detected.
+        </p>
+        <button id="dumpBtn">Dump Calibration Data</button>
+        <button id="dumpFullBtn" style="margin-top:10px;">Dump Full EEPROM</button>
+      </section>
+
+      <div class="download-link" id="dumpDownload">
+        <a href="#" id="dumpLink" download="calibration.dat">💾 <span id="downloadText">Download calibration.dat</span></a>
+      </div>
+      <div class="download-link" id="dumpFullDownload" style="display:none;">
+        <a href="#" id="dumpFullLink" download="eeprom_full.bin">💾 <span id="downloadFullText">Download eeprom_full.bin</span></a>
+      </div>
+    </div>
+
+    <!-- RESTORE CALIBRATION TAB -->
+    <div class="tab-content" id="restore-content" role="tabpanel">
+      <section class="section" aria-labelledby="labelCalibFile">
+        <label id="labelCalibFile">Calibration Dump File (.dat)</label>
+        <div class="file-input-wrapper">
+          <input type="file" id="calibFile" accept=".dat" />
+          <div class="file-input-label" id="calibFileLabel">
+            <span class="file-name" id="calibFileName">No file selected</span>
+            <span class="file-button" id="calibFileButton">Choose file</span>
+          </div>
+        </div>
+      </section>
+
+      <button id="restoreBtn" disabled aria-live="polite">Restore Calibration Data</button>
+    </div>
+
+    <!-- PROGRESS BAR -->
+    <section class="progress-container" id="progressContainer" aria-live="polite">
+      <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="progress-fill" id="progressFill"></div>
+        <div class="progress-label" id="progressLabel">0%</div>
+      </div>
+    </section>
+
+    <!-- CONSOLE LOG -->
+    <section class="log-container" aria-labelledby="logTitle">
+      <div class="log-header">
+        <button class="log-toggle" id="logToggle" type="button" aria-expanded="false">Show Console</button>
+      </div>
+      <div class="log" id="log" aria-live="polite"></div>
+    </section>
+
+    <aside class="info-box" id="infoBox">
+      <strong>Note:</strong> This application requires Chrome/Edge/Opera.
+    </aside>
+
+    <footer class="baseline">
+    <small style="display:block;text-align:center;color:#bdbdbd;margin-top:2em;letter-spacing:0.01em;">
+      <strong id="uvtools-baseline-version">UVTools v7.6.32.8ef387e</strong>
+      &mdash; enhanced by <a href="https://github.com/N7SIX" target="_blank" rel="noopener" style="color:#7ED957;text-decoration:none;">Sean, N7SIX</a><br/>
+      <span style="font-size:0.97em;">based on UVTools v2.2.0 developed by <a href="https://github.com/armel" target="_blank" rel="noopener" style="color:#7ED957;text-decoration:none;">Armel, F4HWN</a></span>
+    </small>
+    </footer>
+
+  </main>
+
+  <script src="js/i18n.js?v=20260502c"></script>
+  <script src="js/flash.js?v=20260502c" type="module"></script>
+</main>
+</body>
+</html>

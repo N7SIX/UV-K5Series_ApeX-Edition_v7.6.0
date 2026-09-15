@@ -14,27 +14,38 @@
  *     limitations under the License.
  */
 #include "app/spectrum.h"
+#ifdef ENABLE_WATERFALL
+#include "app/waterfall.h"
+#endif
+#include "am_fix.h"
 #include "audio.h"
 #include "misc.h"
-
-#if defined(ENABLE_UART) || defined(ENABLE_USB)
-#include "app/uart.h"
-#endif
+#include "helper/battery_calibration.h"
+#include "driver/keyboard.h"
+#include "driver/backlight.h"
+#include "driver/gpio.h"
+#include "radio.h"
 
 #ifdef ENABLE_SCAN_RANGES
 #include "chFrScanner.h"
 #endif
 
 #include "driver/backlight.h"
+#include "driver/keyboard.h"
+#include "driver/bk4819.h"
+#include "scheduler.h"
 #include "frequencies.h"
+#include "helper/battery.h"
+#include "helper/battery_calibration.h"
+#include "helper/rssi_calibration.h"
 #include "ui/helper.h"
 #include "ui/main.h"
 
-#ifdef ENABLE_FEAT_F4HWN_K5VIEWER
-#include "k5viewer.h"
+#ifdef ENABLE_FEAT_N7SIX_SCREENSHOT
+#include "screenshot.h"
 #endif
 
-#ifdef ENABLE_FEAT_F4HWN_SPECTRUM
+#ifdef ENABLE_FEAT_N7SIX_SPECTRUM
 #include "driver/py25q16.h"
 #endif
 
@@ -45,13 +56,27 @@ struct FrequencyBandInfo
     uint32_t middle;
 };
 
-#define F_MIN frequencyBandTable[0].lower
-#define F_MAX frequencyBandTable[BAND_N_ELEM - 1].upper
-
 const uint16_t RSSI_MAX_VALUE = 65535;
 
+#ifdef ENABLE_FEAT_N7SIX_SPECTRUM
+    static void setTailFoundInterrupt(void)
+    {
+        BK4819_WriteRegister(BK4819_REG_3F, BK4819_REG_3F_CxCSS_TAIL);
+    }
+#endif
+
 static uint32_t initialFreq;
+static uint32_t gRxVfoBackupFreq;
 static char String[32];
+
+// ---------------------------------------------------------------------------
+// NOTE: a previous attempt added AppendU32/AppendI32/AppendStr/AppendStrPad
+// here to replace the sprintf() calls in this file, hoping the linker could
+// then garbage-collect the printf format engine.  That never works: printf is
+// still referenced by ui/menu.c, ui/main.c, ui/window? etc. (100+ call sites),
+// so the engine stays in the image and the helpers were pure dead weight.
+// They have been removed again; the build uses -Werror=unused-function.
+// ---------------------------------------------------------------------------
 
 static bool isInitialized = false;
 bool isListening = true;
@@ -60,7 +85,6 @@ bool redrawStatus = true;
 bool redrawScreen = false;
 bool newScanStart = true;
 bool preventKeypress = true;
-bool audioState = true;
 bool lockAGC = false;
 
 State currentState = SPECTRUM, previousState = SPECTRUM;
@@ -76,7 +100,7 @@ static uint16_t blacklistFreqs[15];
 static uint8_t blacklistFreqsIdx;
 #endif
 
-const char *const bwOptions[] = {"25", "12.5", "6.25"};
+const char *bwOptions[] = {"25", "12.5", "6.25"};
 const uint8_t modulationTypeTuneSteps[] = {100, 50, 10};
 const uint8_t modTypeReg47Values[] = {1, 7, 5};
 
@@ -97,16 +121,19 @@ uint32_t currentFreq, tempFreq;
 uint16_t rssiHistory[128];
 
 // Peak hold: tracks the highest Y per column with timed decay
+// #define ENABLE_PEAK_HOLD 0  // Peak hold trace (saves ~500 bytes when disabled)
+#if ENABLE_PEAK_HOLD
 static uint8_t  peakHoldY[128];       // Peak Y value per display column (0=top)
 static uint8_t  peakHoldAge[64];      // Shared decay timer (1 per 2 columns)
 #define PEAK_HOLD_DELAY  15           // Sweeps before decay starts
 #define PEAK_HOLD_INIT   0xFF         // "no peak" sentinel (same as SPECTRUM_TOPY_SKIP)
+#endif
 
 // Cached REG_30 value for scan steps: avoids re-reading it on every SetFScan()
 // call (saves 1 SPI read per step = fewer SPI bus events = less SPI-induced audio interference).
 static uint16_t scanReg30 = 0;
 
-// Bidirectional sweep: true = left→right (fStart→fEnd), false = right→left.
+// Bidirectional sweep: true = left-to-right (fStart->fEnd), false = right-to-left.
 static bool scanForward = true;
 // Alternate sweep start side across full sweep cycles to reduce directional bias.
 static bool scanStartFromLeft = true;
@@ -158,7 +185,7 @@ static AutoSensitivityProfile autoSensitivity = AUTO_SENS_NORMAL;
 // 1 RSSI unit ~= 0.5 dB.
 #define LISTEN_OPEN_HYST_RSSI    4   // +2 dB above trigger to open
 #define LISTEN_CLOSE_HYST_RSSI   4   // -2 dB below trigger to keep listening
-#define LISTEN_RELEASE_LOW_COUNT 4   // consecutive low reads before release
+#define LISTEN_RELEASE_LOW_COUNT 1   // single confirmation is enough for sweep-based analyzer
 #define LISTEN_DROP_EXIT_RSSI   20   // 10 dB abrupt drop => leave RX
 static uint8_t listenLowCount = 0;
 static uint16_t listenPrevRssi = RSSI_MAX_VALUE;
@@ -170,6 +197,7 @@ static uint16_t rssiSmoothed = 0;
 // Sweeps remaining before auto-scaling of dbMax resumes (0 = auto)
 static uint8_t manualDbMaxTimer = 0;
 #define MANUAL_DBMAX_SWEEPS 2
+
 uint8_t vfo;
 uint8_t freqInputIndex = 0;
 uint8_t freqInputDotIndex = 0;
@@ -179,7 +207,15 @@ char freqInputString[11];
 uint8_t menuState = 0;
 uint16_t listenT = 0;
 
-const RegisterSpec registerSpecs[] = {
+// Waterfall row throttle using the SysTick hardware counter,
+// so the interval is the same real wall-clock time regardless of mode-specific
+// tick overhead (scan SPI vs listen Measure).
+#ifdef ENABLE_WATERFALL
+static uint32_t wfLastTick;      // last SysTick snapshot (listen mode)
+static uint32_t scanWfLastTick;  // last SysTick snapshot (scan mode)
+#endif
+
+RegisterSpec registerSpecs[] = {
     {},
     {"LNAs", BK4819_REG_13, 8, 0b11, 1},
     {"LNA", BK4819_REG_13, 5, 0b111, 1},
@@ -188,7 +224,7 @@ const RegisterSpec registerSpecs[] = {
     // {"MIX", 0x13, 3, 0b11, 1}, // TODO: hidden
 };
 
-#ifdef ENABLE_FEAT_F4HWN_SPECTRUM
+#ifdef ENABLE_FEAT_N7SIX_SPECTRUM
 const int8_t LNAsOptions[] = {-19, -16, -11, 0};
 const int8_t LNAOptions[] = {-24, -19, -14, -9, -6, -4, -2, 0};
 const int8_t VGAOptions[] = {-33, -27, -21, -15, -9, -6, -3, 0};
@@ -209,11 +245,11 @@ static const MenuOptions regOptions[] = {
 
 uint16_t statuslineUpdateTimer = 0;
 
-#ifdef ENABLE_FEAT_F4HWN_SPECTRUM
+#ifdef ENABLE_FEAT_N7SIX_SPECTRUM
 static void LoadSettings()
 {
     uint8_t Data[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-    PY25Q16_ReadBuffer(0x00A148, Data, sizeof(Data));
+    PY25Q16_ReadBuffer(SPECTRUM_SETTINGS_SPI_ADDR, Data, sizeof(Data));
 
     // Data[0]: scanStepIndex (7:4), stepsCount (3:2), listenBw (1:0)
     settings.scanStepIndex = (Data[0] >> 4) & 0x0F;
@@ -228,8 +264,13 @@ static void LoadSettings()
     if (settings.listenBw > 2)
         settings.listenBw = BK4819_FILTER_BW_WIDE;
 
-    // Data[1]: manualSetFlag (0), autoSensitivity (2:1)
-    manualSetFlag = Data[1] & 0x01;
+    // Data[1]: manualSetFlag (bit 0), autoSensitivity (bits 2:1)
+    // Guard manualSetFlag against erased flash (0xFF): without this,
+    // 0xFF & 0x01 = 1 incorrectly enables manual mode, disabling
+    // auto-trigger calibration and auto-dbMax adjustment on first use.
+    // autoSensitivity is already protected by the range check below
+    // (0xFF >> 1 & 0x03 = 3 >= AUTO_SENS_N_ELEM -> NORM).
+    manualSetFlag = (Data[1] == 0xFF) ? false : (Data[1] & 0x01);
     autoSensitivity = (Data[1] >> 1) & 0x03;
     if (autoSensitivity >= AUTO_SENS_N_ELEM)
         autoSensitivity = AUTO_SENS_NORMAL;
@@ -247,7 +288,7 @@ static void LoadSettings()
 static void SaveSettings()
 {
     uint8_t Data[8] = {0};
-    PY25Q16_ReadBuffer(0x00A148, Data, sizeof(Data));
+    PY25Q16_ReadBuffer(SPECTRUM_SETTINGS_SPI_ADDR, Data, sizeof(Data));
 
     // Data[0]: scanStepIndex (7:4), stepsCount (3:2), listenBw (1:0)
     Data[0] = (settings.scanStepIndex << 4) | (settings.stepsCount << 2) | settings.listenBw;
@@ -261,7 +302,7 @@ static void SaveSettings()
     // Data[3]: rssiTriggerLevel as uint8_t (0xFF = auto)
     Data[3] = (settings.rssiTriggerLevel == RSSI_MAX_VALUE) ? 0xFF : (uint8_t)settings.rssiTriggerLevel;
 
-    PY25Q16_WriteBuffer(0x00A148, Data, sizeof(Data), false);
+    PY25Q16_WriteBuffer(SPECTRUM_SETTINGS_SPI_ADDR, Data, sizeof(Data), false);
 }
 #endif
 
@@ -324,7 +365,7 @@ static void SetRegMenuValue(uint8_t st, bool add)
 
 // GUI functions
 
-#ifndef ENABLE_FEAT_F4HWN
+#ifndef ENABLE_FEAT_N7SIX
 static void PutPixel(uint8_t x, uint8_t y, bool fill)
 {
     UI_DrawPixelBuffer(gFrameBuffer, x, y, fill);
@@ -335,7 +376,7 @@ static void PutPixelStatus(uint8_t x, uint8_t y, bool fill)
 }
 #endif
 
-#ifndef ENABLE_FEAT_F4HWN
+#ifndef ENABLE_FEAT_N7SIX
 static void GUI_DisplaySmallest(const char *pString, uint8_t x, uint8_t y,
                                 bool statusbar, bool fill)
 {
@@ -373,25 +414,12 @@ static int clamp(int v, int min, int max)
     return v <= min ? min : (v >= max ? max : v);
 }
 
-static uint16_t my_abs(int16_t v) { return v < 0 ? (uint16_t)(-v) : (uint16_t)v; }
-
 void SetState(State state)
 {
     previousState = currentState;
     currentState = state;
     redrawScreen = true;
     redrawStatus = true;
-}
-
-// Radio functions
-
-static void ToggleAFBit(bool on)
-{
-    uint16_t reg = BK4819_ReadRegister(BK4819_REG_47);
-    reg &= ~(1 << 8);
-    if (on)
-        reg |= on << 8;
-    BK4819_WriteRegister(BK4819_REG_47, reg);
 }
 
 static const BK4819_REGISTER_t registers_to_save[] = {
@@ -422,18 +450,9 @@ static void RestoreRegisters()
         BK4819_WriteRegister(registers_to_save[i], registers_stack[i]);
     }
 
-#ifdef ENABLE_FEAT_F4HWN
+#ifdef ENABLE_FEAT_N7SIX
     gVfoConfigureMode = VFO_CONFIGURE;
 #endif
-}
-
-static void ToggleAFDAC(bool on)
-{
-    uint32_t Reg = BK4819_ReadRegister(BK4819_REG_30);
-    Reg &= ~(1 << 9);
-    if (on)
-        Reg |= (1 << 9);
-    BK4819_WriteRegister(BK4819_REG_30, Reg);
 }
 
 static uint32_t NormalizeScanFrequency(uint32_t f)
@@ -501,12 +520,7 @@ static void ResetPeak()
     peak.i = 0;
 }
 
-#ifdef ENABLE_FEAT_F4HWN_SPECTRUM
-    static void setTailFoundInterrupt()
-    {
-        BK4819_WriteRegister(BK4819_REG_3F, BK4819_REG_3F_CxCSS_TAIL);
-    }
-
+#ifdef ENABLE_FEAT_N7SIX_SPECTRUM
     static bool checkIfTailFound()
     {
       uint16_t interrupt_status_bits;
@@ -519,7 +533,6 @@ static void ResetPeak()
         // End listen on CSS tail.
         if (interrupt_status_bits & BK4819_REG_02_CxCSS_TAIL)
         {
-            listenT = 0;
             // disable interrupts
             BK4819_WriteRegister(BK4819_REG_3F, 0);
             // reset the interrupt
@@ -586,6 +599,13 @@ static void TuneToPeak()
 
 static void DeInitSpectrum()
 {
+    // Restore gRxVfo's stored frequency that was overwritten by ToggleRX(true)
+    // during listen mode.  This prevents VFO B's displayed frequency from
+    // showing the last spectrum-tuned fMeasure after spectrum exits.
+    if (gRxVfo && gRxVfoBackupFreq != 0) {
+        gRxVfo->pRX->Frequency = gRxVfoBackupFreq;
+        gRxVfoBackupFreq = 0;
+    }
     SetF(initialFreq);
     RestoreRegisters();
     isInitialized = false;
@@ -596,7 +616,7 @@ uint8_t GetBWRegValueForScan()
     return scanStepBWRegValues[settings.scanStepIndex];
 }
 
-uint16_t GetRssi()
+uint16_t GetRssi(void)
 {
     // Wait for glitch to settle below threshold (not just < 255)
     uint8_t guard = 50;
@@ -607,66 +627,64 @@ uint16_t GetRssi()
     // Discard first read (AGC may still be transitioning), keep second
     BK4819_GetRSSI();
     uint16_t rssi = BK4819_GetRSSI();
+#ifdef ENABLE_AM_FIX
+    if (settings.modulationType == MODULATION_AM && gSetting_AM_fix)
+        rssi += AM_fix_get_gain_diff() * 2;
+#endif
     return rssi;
-}
-
-static void ToggleAudio(bool on)
-{
-    if (on == audioState)
-    {
-        return;
-    }
-    audioState = on;
-    if (on)
-    {
-        AUDIO_AudioPathOn();
-    }
-    else
-    {
-        AUDIO_AudioPathOff();
-    }
 }
 
 static void ToggleRX(bool on)
 {
-    #ifdef ENABLE_FEAT_F4HWN_SPECTRUM
+    #ifdef ENABLE_FEAT_N7SIX_SPECTRUM
     if (isListening == on) {
         return;
     }
     #endif
     isListening = on;
 
-    //RADIO_SetupAGC(settings.modulationType == MODULATION_AM, lockAGC);
-    RADIO_SetupAGC(false, lockAGC);
-
-    BK4819_ToggleGpioOut(BK4819_GPIO6_PIN2_GREEN, on);
-
-    ToggleAudio(on);
-    ToggleAFDAC(on);
-    ToggleAFBit(on);
-
     if (on)
     {
+        // Configure VFO frequency and squelch thresholds (v7.6.0 compatibility)
+        // so BK4819_SetupSquelch() within RADIO_SetupRegisters uses the correct
+        // target frequency and channel-calibrated squelch open/close thresholds.
+        if (gRxVfo) {
+            gRxVfo->pRX->Frequency = fMeasure;
+            RADIO_ConfigureSquelchAndOutputPower(gRxVfo);
+        }
+        RADIO_SetupRegisters(false);
+        RADIO_SetupAGC(false, lockAGC);
+
+#ifdef ENABLE_WATERFALL
+        // Reset waterfall timer for fast first-row push.
+        wfLastTick = gGlobalSysTickCounter - (WATERFALL_GetRowInterval() - 3);
+#endif
+
+        UI_MAIN_SetRxLed(true);
+
+        // Centralized audio path: DAC -> settle -> unmute
+        AUDIO_AudioPathOn();
+
         listenLowCount = 0;
-        // Seed with the RSSI that opened the squelch so the very first measure
-        // can already detect an abrupt drop (quick-PTT case where the operator
-        // released before listen was actually engaged).
-        // listenPrevRssi = RSSI_MAX_VALUE; // previous behavior
         listenPrevRssi = peak.rssi;
-    #ifdef ENABLE_FEAT_F4HWN_SPECTRUM
-        listenT = 25;
-        BK4819_WriteRegister(0x43, listenBWRegValues[settings.listenBw]);
+        BK4819_WriteRegister(BK4819_REG_43, listenBWRegValues[settings.listenBw]);
+#ifdef ENABLE_FEAT_N7SIX_SPECTRUM
         setTailFoundInterrupt();
-    #else
-        listenT = 1000;
-        BK4819_WriteRegister(0x43, listenBWRegValues[settings.listenBw]);
-    #endif
+#endif
     }
     else
     {
+        // Centralized audio path: mute -> settle -> DAC off
+        AUDIO_AudioPathOff();
+
+        UI_MAIN_SetRxLed(false);
+
         listenLowCount = 0;
         listenPrevRssi = RSSI_MAX_VALUE;
-        BK4819_WriteRegister(0x43, GetBWRegValueForScan());
+#ifdef ENABLE_WATERFALL
+        scanWfLastTick = gGlobalSysTickCounter; // Push first row after interval
+#endif
+        BK4819_WriteRegister(BK4819_REG_43, GetBWRegValueForScan());
     }
 }
 
@@ -681,14 +699,33 @@ static void ResetScanStats()
     scanInfo.fPeak = 0;
 }
 
-// Resets scan position and stats without touching the radio — safe to call
+// Resets scan position and stats without touching the radio - safe to call
 // on every sweep restart because scanReg30 and the RF filter path remain
 // valid as long as the scan range hasn't changed.
 static void InitScanPosition()
 {
+    preventKeypress = true;
     ResetScanStats();
     scanInfo.scanStep = GetScanStep();
     scanInfo.measurementsCount = GetStepsCount();
+
+    // Adjust waterfall row interval so refresh rate stays roughly constant
+    // regardless of sweep width.  Narrower scans (fewer steps) need shorter
+    // intervals to keep the waterfall scrolling at a perceptually smooth rate.
+    {
+        uint16_t steps = scanInfo.measurementsCount;
+        if (steps < 16) steps = 16;
+        if (steps > 128) steps = 128;
+        // Target: ~320ms baseline at 128 steps, scale down to ~160ms at 16 steps
+#ifdef ENABLE_WATERFALL
+        uint8_t interval = (uint8_t)(WATERFALL_ROW_10MS_DEFAULT * 128 / steps);
+        if (interval < WATERFALL_ROW_10MS_DEFAULT / 2)
+            interval = WATERFALL_ROW_10MS_DEFAULT / 2;
+        if (interval > WATERFALL_ROW_10MS_DEFAULT * 2)
+            interval = WATERFALL_ROW_10MS_DEFAULT * 2;
+        WATERFALL_SetRowInterval(interval);
+#endif
+    }
     bool startFromLeft = scanStartFromLeft;
 #if SPECTRUM_INTERLACE_LARGE_SWEEPS
     interlacePhase = 0;
@@ -754,9 +791,10 @@ static void RelaunchScan()
 #endif
     preventKeypress = true;
     scanInfo.rssiMin = RSSI_MAX_VALUE;
+    #if ENABLE_PEAK_HOLD
     memset(peakHoldY,   PEAK_HOLD_INIT, sizeof(peakHoldY));
     memset(peakHoldAge, 0,              sizeof(peakHoldAge));
-
+    #endif
 }
 
 static void UpdateScanInfo()
@@ -776,6 +814,9 @@ static void UpdateScanInfo()
         if (settings.dbMin > dbMax)
             settings.dbMin = dbMax;
         redrawStatus = true;
+#ifdef ENABLE_WATERFALL
+        WATERFALL_SetDbRange(settings.dbMin, settings.dbMax);
+#endif
     }
 }
 
@@ -810,18 +851,12 @@ static void AutoTriggerLevel()
         return;
     }
 
-    // Adaptive slew: follow noise floor changes with rate limiting.
-    // Faster convergence when the gap is large (e.g. after filter BW change).
-    int16_t diff  = (int16_t)target - (int16_t)settings.rssiTriggerLevel;
-    bool diffSign = diff < 0;
-    uint16_t absDiff = my_abs(diff);
-
-    if (absDiff > 4)
-    {
-        int16_t step = (absDiff > 12) ? 4 : ((absDiff > 6) ? 2 : 1);
-        settings.rssiTriggerLevel += diffSign ? -step : step;
-    }
-    // Dead zone ±4: hold steady to avoid jitter near target
+    // Simple step-based tracking: move at most 2 units per sweep toward target
+    int16_t diff = (int16_t)target - (int16_t)settings.rssiTriggerLevel;
+    if (diff > 2)
+        settings.rssiTriggerLevel += 2;
+    else if (diff < -2)
+        settings.rssiTriggerLevel -= 2;
 
     if (settings.rssiTriggerLevel != oldTrigger)
         redrawStatus = true;
@@ -868,25 +903,23 @@ static void SetRssiHistory(uint16_t idx, uint16_t rssi)
 
     uint16_t prev = rssiHistory[slot];
 
+    // Attack: instant rise.  Decay: softened so the display settles instead
+    // of flickering.  Large scan ranges use a gentler 3:1 decay and keep
+    // blacklisted slots (RSSI_MAX_VALUE) black instead of decaying through.
 #ifdef ENABLE_SCAN_RANGES
     if (scanInfo.measurementsCount > ARRAY_SIZE(rssiHistory))
     {
         if (prev == RSSI_MAX_VALUE)
             return;
-        // For large ranges: keep fast attack, soften decay to reduce flicker.
-        if (rssi >= prev)
-            rssiHistory[slot] = rssi;
-        else
+        if (rssi < prev)
             rssiHistory[slot] = (uint16_t)((3u * prev + rssi) >> 2);
         return;
     }
 #endif
-    // Attack/decay: instant rise, fast fall for stable display
-    if (rssi >= prev) {
-        rssiHistory[slot] = rssi;              // Attack: instant
-    } else {
+    if (rssi >= prev)
+        rssiHistory[slot] = rssi;               // Attack: instant
+    else
         rssiHistory[slot] = (prev + rssi) >> 1; // Decay: halve the gap each sweep
-    }
 }
 
 static void Measure()
@@ -909,11 +942,16 @@ static void RearmRuntimeState()
     settings.dbMin = -128;
     settings.dbMax = -97;
     memset(rssiHistory, 0, sizeof(rssiHistory));
+#if ENABLE_PEAK_HOLD
     memset(peakHoldY,   PEAK_HOLD_INIT, sizeof(peakHoldY));
     memset(peakHoldAge, 0,              sizeof(peakHoldAge));
+#endif
     rssiSmoothed = 0;
     manualDbMaxTimer = 0;
-    
+#ifdef ENABLE_WATERFALL
+    WATERFALL_SetDbRange(settings.dbMin, settings.dbMax);
+#endif
+
     RelaunchScan();
 
     redrawScreen = true;
@@ -950,7 +988,7 @@ static void ResetSpectrumToDefaults()
     RearmRuntimeState();
     ResetBlacklist();
 
-#ifdef ENABLE_FEAT_F4HWN_SPECTRUM
+#ifdef ENABLE_FEAT_N7SIX_SPECTRUM
     SaveSettings();
 #endif
 }
@@ -975,6 +1013,9 @@ static void UpdateDbMax(bool inc)
                            settings.dbMin + 10, 10);
     ClampRssiTriggerLevel();
     manualDbMaxTimer = MANUAL_DBMAX_SWEEPS;
+#ifdef ENABLE_WATERFALL
+    WATERFALL_SetDbRange(settings.dbMin, settings.dbMax);
+#endif
     redrawScreen = true;
     redrawStatus = true;
 }
@@ -1151,16 +1192,8 @@ static void ToggleListeningBW()
 static void ToggleBacklight()
 {
     settings.backlightState = !settings.backlightState;
-    if (settings.backlightState)
-    {
-        // BACKLIGHT_TurnOn();
-        BACKLIGHT_SetBrightness(gEeprom.BACKLIGHT_MAX);
-    }
-    else
-    {
-        // BACKLIGHT_TurnOff();
-        BACKLIGHT_SetBrightness(gEeprom.BACKLIGHT_MIN);
-    }
+    BACKLIGHT_SetBrightness(settings.backlightState ? gEeprom.BACKLIGHT_MAX
+                                                    : gEeprom.BACKLIGHT_MIN);
 }
 
 static void ToggleStepsCount()
@@ -1221,40 +1254,34 @@ static void UpdateFreqInput(KEY_Code_t key)
         freqInputArr[freqInputIndex++] = key;
     }
 
-    ResetFreqInput();
+    ResetFreqInput(); // tempFreq = 0, display buffer = all '-'
 
-    uint8_t dotIndex =
+    const uint8_t dotIndex =
         freqInputDotIndex == 0 ? freqInputIndex : freqInputDotIndex;
 
-    KEY_Code_t digitKey;
-    for (int i = 0; i < 10; ++i)
+    // Display digits only for entered positions; ResetFreqInput already
+    // '-'-filled the tail, so no full 10-slot pass is needed.
+    for (uint8_t i = 0; i < freqInputIndex; ++i)
     {
-        if (i < freqInputIndex)
-        {
-            digitKey = freqInputArr[i];
-            freqInputString[i] = digitKey <= KEY_9 ? '0' + digitKey - KEY_0 : '.';
-        }
-        else
-        {
-            freqInputString[i] = '-';
-        }
+        freqInputString[i] =
+            freqInputArr[i] <= KEY_9 ? '0' + freqInputArr[i] - KEY_0 : '.';
     }
 
-    uint32_t base = 100000; // 1MHz in BK units
+    // Value accumulation: integer part LSB-first (avoids 32-bit overflow),
+    // fractional part from 0.1 MHz downwards.  The dotIndex guard is implied
+    // by the loop bounds when no dot was entered.
+    uint32_t base = 100000; // 1 MHz in BK units
     for (int i = dotIndex - 1; i >= 0; --i)
     {
         tempFreq += (freqInputArr[i] - KEY_0) * base;
         base *= 10;
     }
 
-    base = 10000; // 0.1MHz in BK units
-    if (dotIndex < freqInputIndex)
+    base = 10000; // 0.1 MHz in BK units
+    for (int i = dotIndex + 1; i < freqInputIndex; ++i)
     {
-        for (int i = dotIndex + 1; i < freqInputIndex; ++i)
-        {
-            tempFreq += (freqInputArr[i] - KEY_0) * base;
-            base /= 10;
-        }
+        tempFreq += (freqInputArr[i] - KEY_0) * base;
+        base /= 10;
     }
     redrawScreen = true;
 }
@@ -1284,6 +1311,8 @@ static bool IsBlacklisted(uint16_t idx)
 
 // Draw things
 
+// #define ENABLE_RSSI_SQRT 0  // Enable square-root RSSI compression (saves ~300 bytes when disabled)
+#if ENABLE_RSSI_SQRT
 // Integer square root (for sugar map non-linear compression)
 static uint8_t iSqrt(uint16_t n)
 {
@@ -1293,6 +1322,7 @@ static uint8_t iSqrt(uint16_t n)
     while (y < x) { x = y; y = (x + n / x) >> 1; }
     return (uint8_t)x;
 }
+#endif
 
 static bool IsRssiHistoryInvalid(uint16_t rssi)
 {
@@ -1302,8 +1332,8 @@ static bool IsRssiHistoryInvalid(uint16_t rssi)
 }
 
 // applied x2 to prevent initial rounding.
-// A mild square-root compression (sugar map) is applied so that weak signals
-// occupy more of the display height while strong peaks are not clipped.
+// Converts RSSI to pixel position using linear mapping.
+// For non-linear (square-root) compression, enable ENABLE_RSSI_SQRT.
 uint8_t Rssi2PX(uint16_t rssi, uint8_t pxMin, uint8_t pxMax)
 {
     const int DB_MIN = settings.dbMin << 1;
@@ -1317,11 +1347,15 @@ uint8_t Rssi2PX(uint16_t rssi, uint8_t pxMin, uint8_t pxMax)
     // Linear 0..PX_RANGE position
     uint8_t linear = (uint8_t)(((dbm - DB_MIN) * PX_RANGE + DB_RANGE / 2) / DB_RANGE);
 
+#if ENABLE_RSSI_SQRT
     // Square-root compression: sqrt(linear * PX_RANGE) rescaled to PX_RANGE
     uint8_t compressed = iSqrt((uint16_t)linear * PX_RANGE);
-
     // Blend 50/50 between linear and compressed for a subtle effect
     return ((uint16_t)linear + compressed) / 2 + pxMin;
+#else
+    // Pure linear mapping - simpler and smaller
+    return linear + pxMin;
+#endif
 }
 
 uint8_t Rssi2Y(uint16_t rssi)
@@ -1372,33 +1406,27 @@ static void CalcCrest(const uint8_t *yArr, uint8_t x,
     *crestTop = y0;
     *crestBot = y0;
 
-    bool goBack = true;
-    uint8_t n = 0;
-
-    if (x > 0) {
-        n = yArr[x - 1];
-        goto Start;
+    // Check left neighbor
+    if (x > 0)
+    {
+        uint8_t n = yArr[x - 1];
+        if (n != SPECTRUM_TOPY_SKIP && n <= DrawingEndY) {
+            uint8_t mid = (y0 + n + 1) >> 1;
+            if (mid < *crestTop) *crestTop = mid;
+            if (mid > *crestBot) *crestBot = mid;
+        }
     }
 
-Back:
-    goBack = false;
-
-    if (x + 1 < 128) {
-        n = yArr[x + 1];
-        goto Start;
+    // Check right neighbor
+    if (x + 1 < 128)
+    {
+        uint8_t n = yArr[x + 1];
+        if (n != SPECTRUM_TOPY_SKIP && n <= DrawingEndY) {
+            uint8_t mid = (y0 + n + 1) >> 1;
+            if (mid < *crestTop) *crestTop = mid;
+            if (mid > *crestBot) *crestBot = mid;
+        }
     }
-
-    return;
-
-Start:
-    if (n != SPECTRUM_TOPY_SKIP && n <= DrawingEndY) {
-        uint8_t mid = (y0 + n + 1) >> 1;
-        if (mid < *crestTop) *crestTop = mid;
-        if (mid > *crestBot) *crestBot = mid;
-    }
-
-    if (goBack)
-        goto Back;
 }
 
 // Draw the spectrum curve (solid crest + checkerboard body) and the peak hold
@@ -1406,6 +1434,7 @@ Start:
 // shape mirrors the live crest exactly, just rendered with a dotted pattern.
 static void DrawSpectrumCurve(const uint8_t *topY)
 {
+#if ENABLE_PEAK_HOLD
     // Pass 1: update peakHoldY[] from topY[] before rendering so that the
     // bridging in Pass 2 already sees fully-updated neighbour values.
     for (uint8_t x = 0; x < 128; x++)
@@ -1432,6 +1461,7 @@ static void DrawSpectrumCurve(const uint8_t *topY)
             }
         }
     }
+#endif
 
     // Pass 2: draw live curve (solid) then peak hold (dotted).
     for (uint8_t x = 0; x < 128; x++)
@@ -1453,6 +1483,7 @@ static void DrawSpectrumCurve(const uint8_t *topY)
                     PutPixel(x, y, true);
         }
 
+#if ENABLE_PEAK_HOLD
         // --- Peak hold dotted crest ---
         uint8_t ph = peakHoldY[x];
         if (ph != PEAK_HOLD_INIT && ph <= DrawingEndY)
@@ -1465,9 +1496,12 @@ static void DrawSpectrumCurve(const uint8_t *topY)
                 if (((x + y) & 1) == 0)
                     PutPixel(x, y, true);
         }
+#endif
     }
 }
 
+// #define ENABLE_SPECTRUM_SMOOTHING 0  // Smooth spectrum curve (saves ~300 bytes when disabled)
+#if ENABLE_SPECTRUM_SMOOTHING
 // Spatial smoothing: 3-bin moving average on topY for a cleaner curve.
 // Only averages valid (non-SKIP) neighbours.
 static void SmoothTopY(uint8_t *topY)
@@ -1489,6 +1523,7 @@ static void SmoothTopY(uint8_t *topY)
         topY[x] = (sum + n / 2) / n;     // rounded average
     }
 }
+#endif
 
 // Fill topY[0..127] by linear interpolation of `bars` RSSI samples across the
 // 128 display columns. Invalid (blacklisted) samples become SPECTRUM_TOPY_SKIP.
@@ -1522,7 +1557,7 @@ static void BuildSpectrumTopY(uint8_t *topY, uint8_t bars)
 
 static void BuildCurrentSpectrumTopY(uint8_t *topY)
 {
-#ifdef ENABLE_FEAT_F4HWN
+#ifdef ENABLE_FEAT_N7SIX
     uint16_t steps = GetStepsCount();
     // max bars at 128 to correctly draw larger numbers of samples
     uint8_t bars = (steps > 128) ? 128 : steps;
@@ -1534,10 +1569,12 @@ static void BuildCurrentSpectrumTopY(uint8_t *topY)
 
     BuildSpectrumTopY(topY, bars);
     // Skip cosmetic smoothing in manual mode so the rendered curve matches
-    // the raw RSSI used by the squelch detector — narrow peaks must visibly
+    // the raw RSSI used by the squelch detector - narrow peaks must visibly
     // cross the trigger line when the radio opens the squelch.
+#if ENABLE_SPECTRUM_SMOOTHING
     if (!manualSetFlag)
         SmoothTopY(topY);
+#endif
 }
 
 static void DrawStatus()
@@ -1545,19 +1582,18 @@ static void DrawStatus()
     if (manualSetFlag)
     {
         char curStr[6];
-        char trigStr[6];
 
         if (IsRssiHistoryInvalid(scanInfo.rssi))
-            sprintf(curStr, "--");
+            strcpy(curStr, "--");
         else
             sprintf(curStr, "%d", Rssi2DBm(scanInfo.rssi));
 
+        // Single-pass "M <cur>/<trig>": the trigger half used to be formatted
+        // into its own buffer only to be spliced straight back in.
         if (monitorMode || settings.rssiTriggerLevel == RSSI_MAX_VALUE)
-            sprintf(trigStr, "--");
+            sprintf(String, "M %s/--", curStr);
         else
-            sprintf(trigStr, "%d", Rssi2DBm(settings.rssiTriggerLevel));
-
-        sprintf(String, "M %s/%s", curStr, trigStr);
+            sprintf(String, "M %s/%d", curStr, Rssi2DBm(settings.rssiTriggerLevel));
     }
     else
     {
@@ -1571,32 +1607,26 @@ static void DrawStatus()
     BOARD_ADC_GetBatteryInfo(&gBatteryVoltages[gBatteryCheckCounter++ % 4],
                              &gBatteryCurrent);
 
-    uint16_t voltage = (gBatteryVoltages[0] + gBatteryVoltages[1] +
-                        gBatteryVoltages[2] + gBatteryVoltages[3]) /
-                       4 * 760 / gBatteryCalibration[3];
+    const uint16_t raw_voltage = (gBatteryVoltages[0] + gBatteryVoltages[1] +
+                                  gBatteryVoltages[2] + gBatteryVoltages[3]) / 4;
+    const uint16_t voltage = BATTERY_CalibrateRaw(raw_voltage,
+                                                  gBatteryCalibration[0],
+                                                  gBatteryCalibration[3]);
 
-    unsigned perc = BATTERY_VoltsToPercent(voltage);
+    const unsigned perc = BATTERY_VoltsToPercent(voltage);
 
-    // sprintf(String, "%d %d", voltage, perc);
-    // GUI_DisplaySmallest(String, 48, 1, true, true);
-
+    // Battery gauge: 10 segments in columns 118..127 (127 is the tip).
+    // Single ascending loop: the old descending unsigned loop never
+    // terminated (i >= 118 stays true after the underflow at i == 117).
     gStatusLine[116] = 0b00011100;
     gStatusLine[117] = 0b00111110;
-    for (int i = 118; i <= 126; i++)
-    {
-        gStatusLine[i] = 0b00100010;
-    }
 
-    for (unsigned i = 127; i >= 118; i--)
-    {
-        if (127 - i <= (perc + 5) * 9 / 100)
-        {
-            gStatusLine[i] = 0b00111110;
-        }
-    }
+    const unsigned filled = (perc + 5) * 9 / 100;
+    for (unsigned i = 118; i <= 127; i++)
+        gStatusLine[i] = (127 - i) <= filled ? 0b00111110 : 0b00100010;
 }
 
-#ifdef ENABLE_FEAT_F4HWN_SPECTRUM
+#ifdef ENABLE_FEAT_N7SIX_SPECTRUM
 static void ShowChannelName(uint32_t f)
 {
     static uint32_t channelF = 0;
@@ -1641,6 +1671,8 @@ static void FormatFrequency(uint32_t freq, char *buffer) {
 
 static void DrawF(uint32_t f)
 {
+    if (f == 0)
+        f = fMeasure; // Never display 0 - use the radio's tuned frequency
     f = NormalizeScanFrequency(f);
     FormatFrequency(f, String);
     // Align frequency with channel name in status bar (both at x=43).
@@ -1652,14 +1684,21 @@ static void DrawF(uint32_t f)
     sprintf(String, "%4sk", bwOptions[settings.listenBw]);
     GUI_DisplaySmallest(String, 108, 7, false, true);
 
-#ifdef ENABLE_FEAT_F4HWN_SPECTRUM
+#ifdef ENABLE_FEAT_N7SIX_SPECTRUM
     ShowChannelName(f);
 #endif
 }
 
+// Shared readout formatter: "%u.%02uk" for a 0.01 kHz value (4 px per char).
+// Consolidates the three identical format sites in DrawNums().
+static void DispKHz(uint32_t v, uint8_t x, uint8_t y)
+{
+    sprintf(String, "%u.%02uk", v / 100, v % 100);
+    GUI_DisplaySmallest(String, x, y, false, true);
+}
+
 static void DrawNums()
 {
-
     if (currentState == SPECTRUM)
     {
 #ifdef ENABLE_SCAN_RANGES
@@ -1668,9 +1707,7 @@ static void DrawNums()
         sprintf(String, "%ux", GetStepsCount());
 #endif
         GUI_DisplaySmallest(String, 0, 1, false, true);
-        sprintf(String, "%u.%02uk", GetScanStep() / 100, GetScanStep() % 100);
-        GUI_DisplaySmallest(String, 0, 7, false, true);
-
+        DispKHz(GetScanStep(), 0, 7);
     }
 
     if (IsCenterMode())
@@ -1678,31 +1715,28 @@ static void DrawNums()
         sprintf(String, "%u.%05u \x7F%u.%02uk", currentFreq / 100000,
                 currentFreq % 100000, settings.frequencyChangeStep / 100,
                 settings.frequencyChangeStep % 100);
-        GUI_DisplaySmallest(String, 36, 49, false, true);
+        GUI_DisplaySmallest(String, 36, 33, false, true);
     }
     else
     {
         FormatFrequency(GetFStart(), String);
-        GUI_DisplaySmallest(String, 0, 49, false, true);
+        GUI_DisplaySmallest(String, 0, 33, false, true);
 
 #ifdef ENABLE_SCAN_RANGES
+        // Scan-range mode: UP/DOWN are blocked, frequencyChangeStep is unused.
+        // Show the visible bandwidth instead, which is meaningful here.
         if (gScanRangeStart)
-        {
-            // Scan-range mode: UP/DOWN are blocked, frequencyChangeStep is unused.
-            // Show the visible bandwidth instead, which is meaningful here.
-            uint32_t bw = gScanRangeStop - gScanRangeStart;
-            sprintf(String, "%u.%02uk", bw / 100, bw % 100);
-        }
+            DispKHz(gScanRangeStop - gScanRangeStart, 48, 33);
         else
 #endif
         {
             sprintf(String, "\x7F%u.%02uk", settings.frequencyChangeStep / 100,
                     settings.frequencyChangeStep % 100);
+            GUI_DisplaySmallest(String, 48, 33, false, true);
         }
-        GUI_DisplaySmallest(String, 48, 49, false, true);
 
         FormatFrequency(GetFEnd(), String);
-        GUI_DisplaySmallest(String, 93, 49, false, true);
+        GUI_DisplaySmallest(String, 93, 33, false, true);
     }
 }
 
@@ -1716,21 +1750,22 @@ static bool SpectrumColumnAtOrAboveY(const uint8_t *topY, uint8_t x, uint8_t y)
         uint8_t n = x + dx;
         if (topY[n] != SPECTRUM_TOPY_SKIP && topY[n] <= y + 1)
             return true;
+#if ENABLE_PEAK_HOLD
         if (peakHoldY[n] != PEAK_HOLD_INIT && peakHoldY[n] <= y + 1)
             return true;
+#endif
     }
 
     return false;
 }
 
-static uint8_t GetScanStepTextWidth()
+// Text width of the scan-step readout "%u.%02uk" (4 px per char: digits + ".XXk").
+// scanStepValues[] holds 0.01 kHz units and tops out at 10000 -> at most 3 digits,
+// so the width is 5, 6 or 7 chars.  Replaces the generic DecimalDigits() helper.
+static uint8_t GetScanStepTextWidth(void)
 {
-    return (sprintf(NULL, "%u", GetScanStep() / 100) + 4) * 4; // "%u.%02uk", 4 px advance per char
-}
-
-static uint8_t GetBwTextWidth()
-{
-    return (strlen(bwOptions[settings.listenBw]) * 4) + 4; // 4 px advance per char
+    const uint16_t s = GetScanStep() / 100;
+    return (s >= 100 ? 7 : s >= 10 ? 6 : 5) * 4;
 }
 
 static void DrawRssiTriggerLevel(const uint8_t *topY)
@@ -1738,13 +1773,12 @@ static void DrawRssiTriggerLevel(const uint8_t *topY)
     if (settings.rssiTriggerLevel == RSSI_MAX_VALUE || monitorMode)
         return;
     uint8_t scanStepTextWidth = GetScanStepTextWidth();
-    uint8_t bwTextWidth = GetBwTextWidth();
     uint8_t y = Rssi2Y(settings.rssiTriggerLevel);
     for (uint8_t x = 0; x < 128; x += 2)
     {
         if (SpectrumColumnAtOrAboveY(topY, x, y))
             continue;
-        if (y <= 12 && (x < scanStepTextWidth + 2 || x >= 128 - bwTextWidth - 2))
+        if (y <= 12 && (x < scanStepTextWidth + 2 || x >= 114))
             continue;
         if (gFrameBuffer[y / 8][x] & (1 << (y % 8)))
             continue;
@@ -1752,46 +1786,27 @@ static void DrawRssiTriggerLevel(const uint8_t *topY)
     }
 }
 
-static void DrawTicks()
-{
-    uint32_t f = GetFStart();
-    uint32_t span = GetFEnd() - GetFStart();
-    uint32_t step = span / 128;
-    for (uint8_t i = 0; i < 128; i += (1 << settings.stepsCount))
-    {
-        f = GetFStart() + span * i / 128;
-        uint8_t barValue = 0b00000001;
-        (f % 10000) < step && (barValue |= 0b00000010);
-        (f % 50000) < step && (barValue |= 0b00000100);
-        (f % 100000) < step && (barValue |= 0b00011000);
-
-        gFrameBuffer[5][i] |= barValue;
-    }
-
-    // center
-    if (IsCenterMode())
-    {
-        memset(gFrameBuffer[5] + 62, 0x80, 5);
-        gFrameBuffer[5][64] = 0xff;
-    }
-    else
-    {
-        memset(gFrameBuffer[5] + 1, 0x80, 3);
-        memset(gFrameBuffer[5] + 124, 0x80, 3);
-
-        gFrameBuffer[5][0] = 0xff;
-        gFrameBuffer[5][127] = 0xff;
-    }
-}
-
 static void DrawArrow(uint8_t x)
 {
-    for (signed i = -2; i <= 2; ++i)
+    // 5-column arrow anchored on the spectrum baseline.  Bit0 = base row (all
+    // five columns), bit1 = middle row (three), bit2 = tip (centre only) -
+    // a table beats the three nested index tests the shape used to need.
+    static const uint8_t arrowRows[5] = {1, 3, 7, 3, 1};
+
+    for (int8_t i = -2; i <= 2; ++i)
     {
-        signed v = x + i;
-        if (!(v & 128))
+        const int v = (int)x + (int)i;
+        if (v < 0 || v >= 128)
+            continue;
+
+        const uint8_t rows = arrowRows[i + 2];
+        for (uint8_t r = 0; r < 3; ++r)
         {
-            gFrameBuffer[5][v] |= (0b01111000 << my_abs(i)) & 0b01111000;
+            if (rows & (1u << r))
+            {
+                const uint8_t y = DrawingEndY - 2 + r;
+                gFrameBuffer[y / 8][v] |= 1 << (y % 8);
+            }
         }
     }
 }
@@ -1891,10 +1906,10 @@ static void OnKeyDown(uint8_t key) {
             menuState = 0;
             break;
         }
-#ifdef ENABLE_FEAT_F4HWN_SPECTRUM
+#ifdef ENABLE_FEAT_N7SIX_SPECTRUM
         SaveSettings();
 #endif
-#ifdef ENABLE_FEAT_F4HWN_RESUME_STATE
+#ifdef ENABLE_FEAT_N7SIX_RESUME_STATE
         gEeprom.CURRENT_STATE = 0;
         SETTINGS_WriteCurrentState();
 #endif
@@ -1968,6 +1983,13 @@ static void OnKeyDownStill(KEY_Code_t key) {
             SetState(SPECTRUM);
             lockAGC = false;
             monitorMode = false;
+#ifdef ENABLE_WATERFALL
+            // Clear the waterfall's internal circular buffer so STILL-mode
+            // single-column data does not appear as a dark horizontal band
+            // when scanning resumes.  The waterfall has its own history
+            // separate from rssiHistory[].
+            WATERFALL_Init();
+#endif
             RelaunchScan();
             break;
         }
@@ -1994,7 +2016,6 @@ static void RenderSpectrum()
     uint8_t topY[128];
 
     BuildCurrentSpectrumTopY(topY);
-    DrawTicks();
     DrawArrow(arrowX);
     DrawSpectrumCurve(topY);
     DrawF(peak.f);
@@ -2063,11 +2084,12 @@ static void RenderStill()
                 gFrameBuffer[row + 1][j + offset] = 0xFF;
             }
         }
-        sprintf(String, "%s", registerSpecs[idx].name);
-        GUI_DisplaySmallest(String, offset + 2, row * 8 + 2, false,
+        // GUI_DisplaySmallest() already takes a const char *, so the
+        // sprintf("%s") round-trip through String[] was pure overhead.
+        GUI_DisplaySmallest(registerSpecs[idx].name, offset + 2, row * 8 + 2, false,
                             menuState != idx);
 
-#ifdef ENABLE_FEAT_F4HWN_SPECTRUM
+#ifdef ENABLE_FEAT_N7SIX_SPECTRUM
         sprintf(String, "%ddB", regOptions[idx].options[GetRegMenuValue(idx)]);
 
         /*
@@ -2113,13 +2135,21 @@ static void Render()
         break;
     }
 
-    // Display blit is done incrementally (one page per tick) — see Tick().
+#ifdef ENABLE_WATERFALL
+    // Render waterfall only during spectrum scanning.
+    // In STILL mode the register display occupies the same framebuffer
+    // pages (5-6), so rendering the waterfall here would overwrite it.
+    if (currentState == SPECTRUM)
+        WATERFALL_Render();
+#endif
+
+    // Display blit is done incrementally (one page per tick) - see Tick().
 }
 
 static bool HandleUserInput()
 {
     kbd.prev = kbd.current;
-    kbd.current = KEYBOARD_GetKey();
+    kbd.current = KEYBOARD_Poll();
 
     if (kbd.current != KEY_INVALID && kbd.current == kbd.prev)
     {
@@ -2274,6 +2304,11 @@ static void FinalizeCompletedSweep()
 
 static void UpdateScan()
 {
+    // Self-regulate at ~1 ms per tick. Waterfall timing is now handled
+    // by the SysTick hardware counter so per-tick overhead differences
+    // between scan and listen modes do not affect the row-push cadence.
+    SYSTEM_DelayMs(1);
+
     Scan();
 
 #if SPECTRUM_INTERLACE_LARGE_SWEEPS
@@ -2347,7 +2382,7 @@ static void UpdateStill()
     preventKeypress = false;
 
     peak.rssi = scanInfo.rssi;
-    // EMA α=0.25 for display only; seed on first sample
+    // EMA alpha=0.25 for display only; seed on first sample
     rssiSmoothed = rssiSmoothed ? (rssiSmoothed * 3 + scanInfo.rssi) >> 2
                                 : scanInfo.rssi;
     AutoTriggerLevel();
@@ -2361,22 +2396,14 @@ static void UpdateListening()
 {
     preventKeypress = false;
 
-    // listenT counts down with 1ms delay per tick — no SPI during this phase.
-    if (listenT)
-    {
-        listenT--;
-        SYSTEM_DelayMs(1);
-        return;
-    }
+    // Timing tick - self-regulate at ~1 ms per call.
+    SYSTEM_DelayMs(1);
 
-    // --- Single SPI burst: all BK4819 accesses happen here, once per
-    // listenT expiry (every 320 ms).  SPI repeats at ~3 Hz — below the
-    // audible range.  Between bursts the bus is completely silent.
-
-#ifdef ENABLE_FEAT_F4HWN_SPECTRUM
+#ifdef ENABLE_FEAT_N7SIX_SPECTRUM
     bool tailFound = checkIfTailFound();
     if (tailFound)
     {
+        SYSTICK_DelayUs(500);
         ToggleRX(false);
         ResetScanStats();
         ResetPeak();
@@ -2387,41 +2414,45 @@ static void UpdateListening()
     }
 #endif
 
-    if (currentState == SPECTRUM)
-    {
-        BK4819_WriteRegister(0x43, GetBWRegValueForScan());
-        Measure();
-        BK4819_WriteRegister(0x43, listenBWRegValues[settings.listenBw]);
-    }
-    else
-    {
-#ifndef ENABLE_FEAT_F4HWN_SPECTRUM
-        if (currentState == STILL)
-        {
-            ToggleRX(false);
-            ResetScanStats();
-            ResetPeak();
-            RequestAutoTriggerRecalibration();
-            newScanStart = true;
-            redrawStatus = true;
-            return;
-        }
-#endif
-        Measure();
-    }
+    // Measure RSSI with the listen BW filter - do NOT switch to scan BW.
+    // Changing REG_43 while audio is unmuted couples the IF filter transient
+    // to the speaker as an audible pop.
+    Measure();
 
     peak.rssi = scanInfo.rssi;
     rssiSmoothed = rssiSmoothed ? (rssiSmoothed * 3 + scanInfo.rssi) >> 2
                                 : scanInfo.rssi;
-    redrawScreen = true;
-    redrawStatus = true;
+
+#ifdef ENABLE_WATERFALL
+    // Waterfall row push at adaptive interval using SysTick hardware counter
+    // for consistent timing regardless of per-tick overhead.
+    if (gGlobalSysTickCounter - wfLastTick >= WATERFALL_GetRowInterval())
+    {
+        wfLastTick = gGlobalSysTickCounter;
+
+        if (currentState == SPECTRUM)
+        {
+            uint16_t count = scanInfo.measurementsCount;
+            if (count == 0 || count > 128) count = 128;
+            WATERFALL_PushRowListen(rssiHistory, count, peak.i, scanInfo.rssi);
+        }
+        else
+        {
+            // In STILL mode the waterfall is not rendered (register display
+            // uses the same framebuffer pages), so pushing a single-column
+            // row would only inject a vertical black-line artifact when
+            // switching back to SPECTRUM. Skip the push entirely.
+        }
+
+        redrawScreen = true;
+        redrawStatus = true;
+    }
+#endif
 
     bool abruptDrop = false;
     if (!monitorMode && listenPrevRssi != RSSI_MAX_VALUE &&
         listenPrevRssi > LISTEN_DROP_EXIT_RSSI)
     {
-        // End TX usually appears as a sharp RSSI fall; leave RX quickly and
-        // resume sweep instead of waiting for the debounce path.
         abruptDrop = (scanInfo.rssi + LISTEN_DROP_EXIT_RSSI) <= listenPrevRssi;
     }
     listenPrevRssi = scanInfo.rssi;
@@ -2451,10 +2482,7 @@ static void UpdateListening()
     }
 
     if (keepListening)
-    {
-        listenT = 320;
         return;
-    }
 
     ToggleRX(false);
     ResetScanStats();
@@ -2466,16 +2494,23 @@ static void UpdateListening()
 
 static void Tick()
 {
-#ifdef ENABLE_FEAT_F4HWN_K5VIEWER
+#ifdef ENABLE_FEAT_N7SIX_SCREENSHOT
     // Parse incoming packets on every tick so serial keys are never missed,
     // regardless of whether the screen needs redrawing.
-    K5VIEWER_ParseInput();
+    SCREENSHOT_ParseInput();
 #endif
 
     if (gNextTimeslice)
     {
         gNextTimeslice = false;
-        BACKLIGHT_Update();
+#ifdef ENABLE_AM_FIX
+        if (settings.modulationType == MODULATION_AM && !lockAGC)
+        {
+            AM_fix_10ms(vfo); // allow AM_Fix to apply its AGC action
+        }
+#endif
+        // BACKLIGHT_Update(); // TODO: Implement or remove
+        (void)0; // placeholder
     }
 
 #ifdef ENABLE_SCAN_RANGES
@@ -2511,6 +2546,21 @@ static void Tick()
     {
         if (currentState == SPECTRUM)
         {
+#ifdef ENABLE_WATERFALL
+            // Waterfall row push at adaptive intervals, independent of sweep
+            // completion.  Uses SysTick hardware counter for wall-clock timing
+            // so scan-mode tick overhead doesn't make it slower than listen mode.
+            // Cap bars at ARRAY_SIZE(rssiHistory) to prevent buffer over-read
+            // in large scan-range mode (measurementsCount > 128).
+            if (gGlobalSysTickCounter - scanWfLastTick >= WATERFALL_GetRowInterval())
+            {
+                scanWfLastTick = gGlobalSysTickCounter;
+                uint16_t wfBars = scanInfo.measurementsCount;
+                if (wfBars > 128) wfBars = 128;
+                WATERFALL_PushRow(rssiHistory, wfBars);
+                redrawScreen = true;
+            }
+#endif
             UpdateScan();
         }
         else if (currentState == STILL)
@@ -2531,9 +2581,9 @@ static void Tick()
     if (redrawScreen || ++renderTimer >= RENDER_PERIOD_TICKS)
     {
         Render();
-        // For K5Viewer
-        #ifdef ENABLE_FEAT_F4HWN_K5VIEWER
-            K5VIEWER_Update(false);
+        // For screenshot
+        #ifdef ENABLE_FEAT_N7SIX_SCREENSHOT
+            SCREENSHOT_Update(false);
         #endif
         redrawScreen = false;
         renderTimer = 0;
@@ -2551,7 +2601,7 @@ void APP_RunSpectrum()
 
     // TX here coz it always? set to active VFO
     vfo = gEeprom.TX_VFO;
-#ifdef ENABLE_FEAT_F4HWN_SPECTRUM
+#ifdef ENABLE_FEAT_N7SIX_SPECTRUM
     LoadSettings();
 #endif
     // set the current frequency in the middle of the display
@@ -2563,24 +2613,33 @@ void APP_RunSpectrum()
         // Previously this branch forced scanStepIndex from VFO step and
         // stepsCount to STEPS_128 on every entry, which made the user think
         // spectrum settings were not persisted.
-        #ifdef ENABLE_FEAT_F4HWN_RESUME_STATE
+        #ifdef ENABLE_FEAT_N7SIX_RESUME_STATE
             gEeprom.CURRENT_STATE = 5;
         #endif
     }
-    else {
+    else
 #endif
+    {
         currentFreq = initialFreq = gTxVfo->pRX->Frequency -
                                     ((GetStepsCount() / 2) * GetScanStep());
-        #ifdef ENABLE_FEAT_F4HWN_RESUME_STATE
+        #ifdef ENABLE_FEAT_N7SIX_RESUME_STATE
             gEeprom.CURRENT_STATE = 4;
         #endif
     }
 
-    #ifdef ENABLE_FEAT_F4HWN_RESUME_STATE
+    #ifdef ENABLE_FEAT_N7SIX_RESUME_STATE
         SETTINGS_WriteCurrentState();
     #endif
 
     BackupRegisters();
+
+    // Backup gRxVfo's stored frequency once at spectrum entry, before any
+    // ToggleRX(true) call overwrites it.  This must happen exactly once per
+    // session; if moved to ToggleRX() it would be overwritten again on each
+    // subsequent listen-mode entry (e.g. each time a new peak is found).
+    if (gRxVfo) {
+        gRxVfoBackupFreq = gRxVfo->pRX->Frequency;
+    }
 
     isListening = true; // to turn off RX later
     newScanStart = true;
@@ -2589,7 +2648,7 @@ void APP_RunSpectrum()
     ToggleRX(true), ToggleRX(false); // hack to prevent noise when squelch off
     RADIO_SetModulation(settings.modulationType = gTxVfo->Modulation);
 
-#ifdef ENABLE_FEAT_F4HWN_SPECTRUM
+#ifdef ENABLE_FEAT_N7SIX_SPECTRUM
     BK4819_SetFilterBandwidth(settings.listenBw, false);
 #else
     BK4819_SetFilterBandwidth(settings.listenBw = BK4819_FILTER_BW_WIDE, false);
@@ -2601,17 +2660,19 @@ void APP_RunSpectrum()
     // manualSetFlag = false;
     // settings.rssiTriggerLevel = RSSI_MAX_VALUE;
 
+#ifdef ENABLE_WATERFALL
+    WATERFALL_Init();
+#endif
+
     RearmRuntimeState();
 
     isInitialized = true;
 
     while (isInitialized)
     {
-#if defined(ENABLE_UART) || defined(ENABLE_USB)
-        UART_ServiceCommands();
-#endif
         Tick();
     }
 
     BACKLIGHT_TurnOn();
 }
+

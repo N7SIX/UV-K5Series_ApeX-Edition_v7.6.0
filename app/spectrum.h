@@ -20,15 +20,10 @@
 #pragma once
 
 #include "keyboard_state.h"
-#include <stdbool.h>
-#include <stdint.h>
-#include <string.h>
-
-#define SPECTRUM_SETTINGS_SPI_ADDR  0x00A148u  // PY25Q16 address for spectrum settings (8 bytes)
 
 #include "../bitmaps.h"
 #include "../board.h"
-#include "ARMCM0.h"     /* NVIC/SystemTick (was py32f0xx.h on the K1/PY32 tree) */
+#include "py32f0xx.h"
 #include "../driver/bk4819-regs.h"
 #include "../driver/bk4819.h"
 #include "../driver/gpio.h"
@@ -40,9 +35,12 @@
 #include "../font.h"
 #include "../helper/battery.h"
 #include "../misc.h"
-#include "../radio/radio.h"
+#include "../radio.h"
 #include "../settings.h"
 #include "../ui/helper.h"
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
 
 static const uint8_t DrawingEndY  = 40;
 static const uint8_t DrawingTopY  =  8;  // Reserve top 8px for frequency display (gFrameBuffer[0])

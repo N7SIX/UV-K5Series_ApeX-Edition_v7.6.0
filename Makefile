@@ -4,7 +4,7 @@
 # 1 = enable
 
 # ---- STOCK QUANSHENG FEATURES ----
-ENABLE_FMRADIO                  ?= 1
+ENABLE_FMRADIO                  ?= 0
 ENABLE_UART                     ?= 1
 ENABLE_AIRCOPY                  ?= 0
 ENABLE_NOAA                     ?= 0
@@ -14,10 +14,10 @@ ENABLE_ALARM                    ?= 0
 ENABLE_TX1750                   ?= 0
 ENABLE_PWRON_PASSWORD           ?= 0
 ENABLE_DTMF_CALLING             ?= 0
-ENABLE_FLASHLIGHT               ?= 1
+ENABLE_FLASHLIGHT               ?= 0
 
 # ---- CUSTOM MODS ----
-ENABLE_SPECTRUM                 ?= 0
+ENABLE_SPECTRUM                 ?= 1
 ENABLE_BIG_FREQ                 ?= 1
 ENABLE_SMALL_BOLD               ?= 1
 ENABLE_CUSTOM_MENU_LAYOUT       ?= 0
@@ -30,16 +30,26 @@ ENABLE_BOOT_BEEPS               ?= 0
 ENABLE_SHOW_CHARGE_LEVEL        ?= 0
 ENABLE_REVERSE_BAT_SYMBOL       ?= 0
 ENABLE_NO_CODE_SCAN_TIMEOUT     ?= 0
-ENABLE_AM_FIX                   ?= 1
+ENABLE_AM_FIX                   ?= 0
 ENABLE_SQUELCH_MORE_SENSITIVE   ?= 0
-ENABLE_FASTER_CHANNEL_SCAN      ?= 1
+ENABLE_FASTER_CHANNEL_SCAN      ?= 0
 ENABLE_RSSI_BAR                 ?= 1
 ENABLE_AUDIO_BAR                ?= 1
 ENABLE_COPY_CHAN_TO_VFO         ?= 0
 ENABLE_REDUCE_LOW_MID_TX_POWER  ?= 0
 ENABLE_BYP_RAW_DEMODULATORS     ?= 0
 ENABLE_BLMIN_TMP_OFF            ?= 0
-ENABLE_SCAN_RANGES              ?= 1
+ENABLE_SCAN_RANGES              ?= 0
+ENABLE_WATERFALL                ?= 0       # Waterfall display (saves FLASH when disabled; only wanted with spectrum)
+# Spectrum optimization toggles (disabled by default to reduce FLASH usage)
+ENABLE_SPECTRUM_PEAK_HOLD       ?= 0       # Peak hold trace (saves ~500 bytes when disabled)
+ENABLE_SPECTRUM_SMOOTH          ?= 0       # Curve smoothing (saves ~300 bytes when disabled)
+ENABLE_SPECTRUM_INTERLACE       ?= 0       # Interlaced sweeps for >128-step scan ranges
+ENABLE_SPECTRUM_BLACKLIST       ?= 0       # KEY_SIDE1 blacklist of noisy frequencies
+
+ENABLE_SPECTRUM_RSSI_SQRT       ?= 0       # Square-root RSSI compression (saves ~300 bytes when disabled)
+ENABLE_SPECTRUM_REG_MENU        ?= 0       # STILL-mode LNA/LNA/VGA register menu (saves ~700 bytes when disabled)
+ENABLE_SPECTRUM_BIDIR           ?= 0       # Bidirectional sweep (alternating start side; saves ~400 bytes when disabled)
 
 # ---- CONTRIB MODS ----
 
@@ -56,7 +66,7 @@ ENABLE_FEAT_N7SIX_QRCODE        ?= 0
 ENABLE_FEAT_N7SIX_GAME          ?= 0
 ENABLE_FEAT_N7SIX_SCREENSHOT    ?= 0
 ENABLE_FEAT_N7SIX_SPECTRUM      ?= 0
-ENABLE_FEAT_N7SIX_RX_TX_TIMER   ?= 1
+ENABLE_FEAT_N7SIX_RX_TX_TIMER   ?= 0
 ENABLE_FEAT_N7SIX_CHARGING_C    ?= 0
 ENABLE_FEAT_N7SIX_SLEEP         ?= 0
 ENABLE_FEAT_N7SIX_RESUME_STATE  ?= 0
@@ -64,7 +74,7 @@ ENABLE_FEAT_N7SIX_NARROWER      ?= 0
 ENABLE_FEAT_N7SIX_INV           ?= 0
 ENABLE_FEAT_N7SIX_CTR           ?= 0
 ENABLE_FEAT_N7SIX_RESCUE_OPS    ?= 0
-ENABLE_FEAT_N7SIX_VOL           ?= 1
+ENABLE_FEAT_N7SIX_VOL           ?= 0
 ENABLE_FEAT_N7SIX_RESET_CHANNEL ?= 0
 ENABLE_FEAT_N7SIX_PMR           ?= 0
 ENABLE_FEAT_N7SIX_GMRS_FRS_MURS	?= 0
@@ -173,7 +183,9 @@ OBJS += app/main.o
 OBJS += app/menu.o
 ifeq ($(ENABLE_SPECTRUM),1)
 OBJS += app/spectrum.o
+ifeq ($(ENABLE_WATERFALL),1)
 OBJS += app/waterfall.o
+endif
 endif
 ifeq ($(ENABLE_FEAT_N7SIX_SCREENSHOT), 1)
 OBJS += system/screenshot.o
@@ -323,7 +335,7 @@ CFLAGS += -Wno-lto-type-mismatch
 CFLAGS += -ffunction-sections -fdata-sections
 
 ifeq ($(ENABLE_LTO),1)
-	CFLAGS += -flto=auto -ffat-lto-objects
+	CFLAGS += -flto=auto -ffat-lto-objects -flto-partition=none
 	# Unused sections are already handled globally above, but keep the
 	# fat objects so non-LTO tools (nm/size/objcopy) still work.
 	# Link must also run LTO, otherwise fat objects link without
@@ -348,6 +360,45 @@ CFLAGS += -DAUTHOR_STRING=\"$(AUTHOR_STRING)\" -DVERSION_STRING=\"$(VERSION_STRI
 
 ifeq ($(ENABLE_SPECTRUM),1)
 CFLAGS += -DENABLE_SPECTRUM
+endif
+ifeq ($(ENABLE_WATERFALL),1)
+CFLAGS += -DENABLE_WATERFALL
+endif
+# Spectrum optimization toggles (disabled by default to save FLASH space)
+ifeq ($(ENABLE_SPECTRUM_PEAK_HOLD),1)
+	CFLAGS += -DENABLE_PEAK_HOLD=1
+else
+	CFLAGS += -DENABLE_PEAK_HOLD=0
+endif
+ifeq ($(ENABLE_SPECTRUM_SMOOTH),1)
+	CFLAGS += -DENABLE_SPECTRUM_SMOOTHING=1
+else
+	CFLAGS += -DENABLE_SPECTRUM_SMOOTHING=0
+endif
+ifeq ($(ENABLE_SPECTRUM_RSSI_SQRT),1)
+	CFLAGS += -DENABLE_RSSI_SQRT=1
+else
+	CFLAGS += -DENABLE_RSSI_SQRT=0
+endif
+ifeq ($(ENABLE_SPECTRUM_REG_MENU),1)
+	CFLAGS += -DENABLE_SPECTRUM_REG_MENU=1
+else
+	CFLAGS += -DENABLE_SPECTRUM_REG_MENU=0
+endif
+ifeq ($(ENABLE_SPECTRUM_INTERLACE),1)
+	CFLAGS += -DSPECTRUM_INTERLACE_LARGE_SWEEPS=1
+else
+	CFLAGS += -DSPECTRUM_INTERLACE_LARGE_SWEEPS=0
+endif
+ifeq ($(ENABLE_SPECTRUM_BLACKLIST),1)
+	CFLAGS += -DENABLE_SPECTRUM_BLACKLIST=1
+else
+	CFLAGS += -DENABLE_SPECTRUM_BLACKLIST=0
+endif
+ifeq ($(ENABLE_SPECTRUM_BIDIR),1)
+	CFLAGS += -DENABLE_SPECTRUM_BIDIR=1
+else
+	CFLAGS += -DENABLE_SPECTRUM_BIDIR=0
 endif
 ifeq ($(ENABLE_SWD),1)
 	CFLAGS += -DENABLE_SWD
@@ -551,6 +602,9 @@ endif
 
 LDFLAGS =
 LDFLAGS += -z noexecstack -mcpu=cortex-m0 -nostartfiles -Wl,-T,config/firmware.ld -Wl,--gc-sections -fshort-wchar -Wl,--no-warn-mismatch -Wno-lto-type-mismatch
+# Single-partition LTO lets the linker inline/fold across what would otherwise
+# be separate LTO partitions (measured ~124 B smaller binary).
+LDFLAGS += -flto-partition=none
 
 # Use newlib-nano instead of newlib
 LDFLAGS += --specs=nano.specs
@@ -598,6 +652,23 @@ endif
 
 
 
+# ---- Firmware packing ----
+# Preferred packer: Python + crcmod (config/fw-pack.py, same as upstream egzumer).
+# Fallback: pure PowerShell port (config/fw-pack.ps1) so hosts without Python
+# still produce the flashable .packed.bin (CRC-16/XMODEM + XOR obfuscation).
+PACKED_BIN = build/ApeX/n7six.ApeX-k5.$(VERSION_STRING).packed.bin
+PS_PACK = powershell -NoProfile -ExecutionPolicy Bypass -File config/fw-pack.ps1 -InBin build/ApeX/n7six.ApeX-k5.$(VERSION_STRING).bin -Edition $(EDITION_STRING) -Version $(VERSION_STRING) -OutBin $(PACKED_BIN)
+
+ifdef MY_PYTHON
+ifeq ($(HAS_CRCMOD),)
+PACK_CMD = $(MY_PYTHON) config/fw-pack.py build/ApeX/n7six.ApeX-k5.$(VERSION_STRING).bin $(EDITION_STRING) $(VERSION_STRING) $(PACKED_BIN)
+else
+PACK_CMD = $(PS_PACK)
+endif
+else
+PACK_CMD = $(PS_PACK)
+endif
+
 all: $(TARGET)
 	@echo "-- The C compiler identification is $$(arm-none-eabi-gcc --version | head -n 1)"
 	@echo "-- Found compiler: $$(which arm-none-eabi-gcc)"
@@ -631,16 +702,19 @@ FLASH_PCT=$$(awk "BEGIN {printf \"%.2f\", ($$FLASH_USED/$$FLASH_LIMIT)*100}") ; 
 RAM_PCT=$$(awk "BEGIN {printf \"%.2f\", ($$RAM_USED/$$RAM_LIMIT)*100}") ; \
 printf "%-15s %10s %12s %10s\n" "FLASH" "$$FLASH_USED" "$$FLASH_LIMIT" "$$FLASH_PCT%"; \
 printf "%-15s %10s %12s %10s\n" "RAM" "$$RAM_USED" "$$RAM_LIMIT" "$$RAM_PCT%"; \
+	FLASH_FLASHABLE=61439 ; \
+	if [ "$$FLASH_USED" -gt "$$FLASH_FLASHABLE" ]; then \
+		echo "" ; \
+		echo "  !! WARNING: FLASH usage $$FLASH_USED B exceeds the FLASHABLE limit $$FLASH_FLASHABLE B (0xEFFF)." ; \
+		echo "     The UV-K5/K6 bootloader owns 0xF000-0xFFFF, so UVTools (legacy engine) rejects" ; \
+		echo "     application images larger than 0xEFFF.  Image is over by $$((FLASH_USED - FLASH_FLASHABLE)) B." ; \
+		echo "     Disable optional features or shrink code until FLASH <= $$FLASH_FLASHABLE B." ; \
+		echo "" ; \
+	fi ; \
 echo "Done: ApeX Edition, Successful!"'
 
-ifdef MY_PYTHON
-ifeq ($(HAS_CRCMOD),)
-	$(MY_PYTHON) config/fw-pack.py build/ApeX/n7six.ApeX-k5.$(VERSION_STRING).bin $(EDITION_STRING) $(VERSION_STRING) build/ApeX/n7six.ApeX-k5.$(VERSION_STRING).packed.bin
+	$(PACK_CMD)
 	@echo "Firmware packed: n7six.ApeX-k5.$(VERSION_STRING).packed.bin"
-endif
-else
-	$(SIZE) $(TARGET)
-endif
 
 debug:
 	@echo "NOTE: debug target requires Linux/Docker with OpenOCD + J-Link. Windows users: see README.md"
