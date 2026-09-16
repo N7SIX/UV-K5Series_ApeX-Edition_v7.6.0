@@ -27,43 +27,62 @@
 
 void UI_GenerateChannelString(char *pString, const uint16_t Channel)
 {
-    unsigned int i;
-
     if (gInputBoxIndex == 0)
     {
-        sprintf(pString, "CH-%02u", Channel + 1);
+        // "CH-XX" — 5 chars + NUL. Build manually to avoid pulling in sprintf.
+        pString[0] = 'C';
+        pString[1] = 'H';
+        pString[2] = '-';
+        uint16_t v = Channel + 1;
+        pString[5] = 0;
+        pString[4] = (v % 10) + '0'; v /= 10;
+        pString[3] = (v % 10) + '0';
         return;
     }
 
     pString[0] = 'C';
     pString[1] = 'H';
     pString[2] = '-';
-    for (i = 0; i < 2; i++)
-        pString[i + 3] = (gInputBox[i] == 10) ? '-' : gInputBox[i] + '0';
-
+    pString[3] = (gInputBox[0] == 10) ? '-' : gInputBox[0] + '0';
+    pString[4] = (gInputBox[1] == 10) ? '-' : gInputBox[1] + '0';
     pString[5] = 0;
 }
 
 void UI_GenerateChannelStringEx(char *pString, const bool bShowPrefix, const uint16_t ChannelNumber)
 {
     if (gInputBoxIndex > 0) {
-        for (unsigned int i = 0; i < 4; i++) {
-            pString[i] = (gInputBox[i] == 10) ? '-' : gInputBox[i] + '0';
-        }
-
+        // already unrolled above
+        pString[0] = (gInputBox[0] == 10) ? '-' : gInputBox[0] + '0';
+        pString[1] = (gInputBox[1] == 10) ? '-' : gInputBox[1] + '0';
+        pString[2] = (gInputBox[2] == 10) ? '-' : gInputBox[2] + '0';
+        pString[3] = (gInputBox[3] == 10) ? '-' : gInputBox[3] + '0';
         pString[4] = 0;
         return;
     }
 
     if (bShowPrefix) {
-        // BUG here? Prefixed NULLs are allowed
-        sprintf(pString, "CH-%04u", ChannelNumber + 1);
+        // "CH-NNNN" — 7 chars + NUL. Build manually to avoid sprintf.
+        pString[0] = 'C';
+        pString[1] = 'H';
+        pString[2] = '-';
+        uint16_t v = ChannelNumber + 1;
+        pString[7] = 0;
+        pString[6] = (v % 10) + '0'; v /= 10;
+        pString[5] = (v % 10) + '0'; v /= 10;
+        pString[4] = (v % 10) + '0'; v /= 10;
+        pString[3] = (v % 10) + '0';
     } else if (ChannelNumber == MR_CHANNEL_LAST + 1) {
-        strcpy(pString, "None");
+        memcpy(pString, "None", 5);
     } else if (ChannelNumber == 0xFFFF) {
-        strcpy(pString, "NULL");
+        memcpy(pString, "NULL", 5);
     } else {
-        sprintf(pString, "%04u", ChannelNumber + 1);
+        // "%04u" — 4 chars + NUL.
+        uint16_t v = ChannelNumber + 1;
+        pString[5] = 0;
+        pString[4] = (v % 10) + '0'; v /= 10;
+        pString[3] = (v % 10) + '0'; v /= 10;
+        pString[2] = (v % 10) + '0'; v /= 10;
+        pString[1] = (v % 10) + '0';
     }
 }
 

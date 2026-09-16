@@ -43,6 +43,7 @@ enum Vfo_txtr_mode{
 typedef enum center_line_t center_line_t;
 
 extern center_line_t center_line;
+extern const int8_t dBmCorrTable[7];
 
 #ifdef ENABLE_FEAT_N7SIX
 void UI_MAIN_SetRxLed(bool bOn);

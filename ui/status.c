@@ -113,16 +113,10 @@ void UI_DisplayStatus()
                 }
                 else
                 {
-                    const char *name = "LST";
-
-                    // Check if name is valid
-                    if (!IsEmptyName(name, 4)) {
-                        sprintf(str, "%.3s", name);
-                        end = 14;
-                    } else {
-                        sprintf(str, "%02d", gEeprom.SCAN_LIST_DEFAULT);
-                        end = 10;
-                    }
+                    // Fixed "LST" label: the old IsEmptyName()/sprintf("%.3s")
+                    // dance always produced "LST" for this string literal.
+                    strcpy(str, "LST");
+                    end = 14;
                 }
 
                 if (gEeprom.SCAN_LIST_ENABLED[gEeprom.SCAN_LIST_DEFAULT - 1]) {

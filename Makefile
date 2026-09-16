@@ -14,7 +14,7 @@ ENABLE_ALARM                    ?= 0
 ENABLE_TX1750                   ?= 0
 ENABLE_PWRON_PASSWORD           ?= 0
 ENABLE_DTMF_CALLING             ?= 0
-ENABLE_FLASHLIGHT               ?= 0
+ENABLE_FLASHLIGHT               ?= 1
 
 # ---- CUSTOM MODS ----
 ENABLE_SPECTRUM                 ?= 1
@@ -46,7 +46,6 @@ ENABLE_SPECTRUM_PEAK_HOLD       ?= 0       # Peak hold trace (saves ~500 bytes w
 ENABLE_SPECTRUM_SMOOTH          ?= 0       # Curve smoothing (saves ~300 bytes when disabled)
 ENABLE_SPECTRUM_INTERLACE       ?= 0       # Interlaced sweeps for >128-step scan ranges
 ENABLE_SPECTRUM_BLACKLIST       ?= 0       # KEY_SIDE1 blacklist of noisy frequencies
-
 ENABLE_SPECTRUM_RSSI_SQRT       ?= 0       # Square-root RSSI compression (saves ~300 bytes when disabled)
 ENABLE_SPECTRUM_REG_MENU        ?= 0       # STILL-mode LNA/LNA/VGA register menu (saves ~700 bytes when disabled)
 ENABLE_SPECTRUM_BIDIR           ?= 0       # Bidirectional sweep (alternating start side; saves ~400 bytes when disabled)

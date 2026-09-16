@@ -35,7 +35,6 @@
 #include "external/printf/printf.h"
 #include "functions.h"
 #include "helper/battery.h"
-#include "helper/rssi_calibration.h"
 #include "misc.h"
 #include "radio.h"
 #include "settings.h"
@@ -58,6 +57,10 @@
 #endif
 
 center_line_t center_line = CENTER_LINE_NONE;
+
+// dBmCorrTable (per-band RSSI->dBm correction) is defined once in core/misc.c
+// and declared extern in ui/main.h. Do NOT redefine it here — a second external
+// definition breaks the LTO link (multiple-definition error).
 
 #ifdef ENABLE_FEAT_N7SIX
     // static int8_t RxBlink;
@@ -411,7 +414,14 @@ static void ScanProgress_DrawGaugeLine(uint8_t line, uint32_t current_index, uin
 
 static inline uint8_t ScanProgress_DecimalDigits(uint32_t value)
 {
-    return sprintf(NULL, "%u", value);
+    // Digit count without pulling in sprintf just to measure a length.
+    uint8_t digits = 1;
+    while (value >= 10)
+    {
+        value /= 10;
+        digits++;
+    }
+    return digits;
 }
 
 static void ScanProgress_FormatIndex(char *out, size_t out_size, uint32_t current_index, uint32_t total, uint8_t width)
@@ -1126,7 +1136,7 @@ void DisplayRSSIBar(const bool now)
     }
     else
     {
-        sprintf(str, "% 4d %s", display_rssi_dBm, "dBm");
+        sprintf(str, "% 4d dBm", display_rssi_dBm);
         if(isMainOnly())
             GUI_DisplaySmallest(str, 2, 41, false, true);
         else
@@ -1484,7 +1494,12 @@ void UI_DisplayMain(void)
                     if (gDTMF_CallState == DTMF_CALL_STATE_CALL_OUT) {
                         pPrintStr = (gDTMF_State == DTMF_STATE_CALL_OUT_RSP) ? "CALL OUT(RSP)" : "CALL OUT";
                     } else if (gDTMF_CallState == DTMF_CALL_STATE_RECEIVED || gDTMF_CallState == DTMF_CALL_STATE_RECEIVED_STAY) {
-                        sprintf(String, "CALL FRM:%s", (DTMF_FindContact(gDTMF_Caller, sizeof(gDTMF_Caller), Contact, sizeof(Contact))) ? Contact : gDTMF_Caller);
+                        // "CALL FRM:<name>" — build manually to avoid sprintf.
+                        const char * who = DTMF_FindContact(gDTMF_Caller, sizeof(gDTMF_Caller), Contact, sizeof(Contact)) ? Contact : gDTMF_Caller;
+                        memcpy(String, "CALL FRM:", 9);
+                        size_t i = 0;
+                        while (who[i] != '\0' && i < sizeof(gDTMF_Caller)) String[9 + i] = who[i], i++;
+                        String[9 + i] = '\0';
                         pPrintStr = String;
                     } else if (gDTMF_IsTx) {
                         pPrintStr = (gDTMF_State == DTMF_STATE_TX_SUCC) ? "DTMF TX(SUCC)" : "DTMF TX";
@@ -1995,7 +2010,8 @@ void UI_DisplayMain(void)
 
             case 2:
             case 3:
-            sprintf(String, (int)pConfig->CodeType == 2 ? "%03oN" : "%03oI", DCS_Options[pConfig->Code]);
+            sprintf(String, "%03o%c", DCS_Options[pConfig->Code],
+                    (int)pConfig->CodeType == 2 ? 'N' : 'I');
             break;
 
             default:
@@ -2373,7 +2389,7 @@ void UI_DisplayMain(void)
 #endif
     )
     {
-        sprintf(String, "VFO %s", activeTxVFO ? "B" : "A");
+        strcpy(String, activeTxVFO ? "VFO B" : "VFO A");
 
 #ifdef ENABLE_FEAT_N7SIX
         GUI_DisplaySmallestInverse(String, 107, 6, false, true, 127);

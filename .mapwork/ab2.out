@@ -1,0 +1,24 @@
+=== VARIANT: baseline () ===
+baseline FLASH=61836
+=== VARIANT: no_flashlight (ENABLE_FLASHLIGHT=0) ===
+no_flashlight FAILED
+C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: C:\Users\sebue\AppData\Local\Temp\ccdQ57na.lto.o:(.rodata+0xac): undefined reference to `ACTION_FlashLight'
+collect2.exe: error: ld returned 1 exit status
+make: *** [n7six] Error 1
+=== VARIANT: no_uart (ENABLE_UART=0) ===
+no_uart FAILED
+C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: <artificial>:(.text+0xbcfc): undefined reference to `UART_HandleCommand'
+C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: (UART_HandleCommand): Unknown destination type (ARM/Thumb) in C:\Users\sebue\AppData\Local\Temp\cczHmGED.lto.o
+<artificial>:(.text+0xbcfc): dangerous relocation: unsupported relocation
+collect2.exe: error: ld returned 1 exit status
+make: *** [n7six] Error 1
+=== VARIANT: no_both (ENABLE_UART=0 ENABLE_FLASHLIGHT=0) ===
+no_both FAILED
+C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: (UART_HandleCommand): Unknown destination type (ARM/Thumb) in C:\Users\sebue\AppData\Local\Temp\ccLz2FLl.lto.o
+<artificial>:(.text+0xbcc8): dangerous relocation: unsupported relocation
+C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: C:\Users\sebue\AppData\Local\Temp\ccLz2FLl.lto.o:(.rodata+0xac): undefined reference to `ACTION_FlashLight'
+collect2.exe: error: ld returned 1 exit status
+make: *** [n7six] Error 1
+=== VARIANT: restore_baseline () ===
+restore_baseline FLASH=61836
+=== ALL DONE ===

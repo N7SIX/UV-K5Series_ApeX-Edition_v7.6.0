@@ -253,7 +253,7 @@ void UI_DisplayWelcome(void)
         char WelcomeString0[16];
         char WelcomeString1[16];
         char WelcomeString2[16];
-        char WelcomeString3[32];
+        char WelcomeString3[16];
 
         // 0x0EB0
         PY25Q16_ReadBuffer(0x00A0C8, WelcomeString0, 16);

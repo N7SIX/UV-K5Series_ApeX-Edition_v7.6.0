@@ -289,8 +289,6 @@ static void NextMemChannel(void)
     const unsigned int  prev_chan    = gNextMrChannel;
     unsigned int        chan         = 0;
 
-    //char str[64] = "";
-
     if (enabled)
     {
         switch (currentScanList)

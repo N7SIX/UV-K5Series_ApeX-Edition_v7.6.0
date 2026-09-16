@@ -23,7 +23,7 @@
 
 #include "../bitmaps.h"
 #include "../board.h"
-#include "py32f0xx.h"
+#include "../bsp/dp32g030/gpio.h"
 #include "../driver/bk4819-regs.h"
 #include "../driver/bk4819.h"
 #include "../driver/gpio.h"
