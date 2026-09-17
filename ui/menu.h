@@ -53,7 +53,9 @@ enum
     MENU_MEM_NAME,
     MENU_MDF,
     MENU_SAVE,
+#ifdef ENABLE_VOX
     MENU_VOX,
+#endif
     MENU_ABR,
     MENU_ABR_ON_TX_RX,
     MENU_ABR_MIN,
@@ -131,8 +133,12 @@ enum
     MENU_SET_PTT,
     MENU_SET_TOT,
     MENU_SET_EOT,
+#ifdef ENABLE_FEAT_N7SIX_CTR
     MENU_SET_CTR,
+#endif
+#ifdef ENABLE_FEAT_N7SIX_INV
     MENU_SET_INV,
+#endif
     MENU_SET_LCK,
     MENU_SET_MET,
     MENU_SET_GUI,

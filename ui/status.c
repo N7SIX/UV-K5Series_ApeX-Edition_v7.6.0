@@ -1,4 +1,4 @@
-﻿/* Copyright 2023 Dual Tachyon
+/* Copyright 2023 Dual Tachyon
  * https://github.com/DualTachyon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -119,7 +119,8 @@ void UI_DisplayStatus()
                     end = 14;
                 }
 
-                if (gEeprom.SCAN_LIST_ENABLED[gEeprom.SCAN_LIST_DEFAULT - 1]) {
+                if (gEeprom.SCAN_LIST_DEFAULT >= 1 && gEeprom.SCAN_LIST_DEFAULT <= 3 &&
+                    gEeprom.SCAN_LIST_ENABLED[gEeprom.SCAN_LIST_DEFAULT - 1]) {
                     strcat(str, "+");
                     end += 4;
                 }

@@ -7,7 +7,9 @@ _Min_Stack_Size = 0x80;  /* required amount of stack */
 
 MEMORY
 {
-	FLASH (rx)      : ORIGIN = 0x00000000, LENGTH = 64K
+	/* Conservative UV-K5 v1 application ceiling, matching the build warning.
+	 * Includes initialized RAM data loaded from FLASH; never use the full 64K. */
+	FLASH (rx)      : ORIGIN = 0x00000000, LENGTH = 0xEFFF
 	RAM (xrw)       : ORIGIN = 0x20000000, LENGTH = 16K
 }
 

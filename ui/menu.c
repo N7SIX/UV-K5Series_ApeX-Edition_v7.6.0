@@ -225,7 +225,9 @@ const t_menu_item MenuList[] =
     {"W/N",         MENU_W_N           },
     {"Power",       MENU_TXP           },
     {"BatSav",      MENU_SAVE          },
+#ifdef ENABLE_VOX
     {"VOX",         MENU_VOX           },
+#endif
     {"RxMode",      MENU_TDR           },
     {"Beep",        MENU_BEEP          },
 #ifdef ENABLE_VOICE
@@ -333,8 +335,12 @@ const t_menu_item MenuList[] =
     {"SetPTT",      MENU_SET_PTT       },
     {"SetTOT",      MENU_SET_TOT       },
     {"SetEOT",      MENU_SET_EOT       },
+#ifdef ENABLE_FEAT_N7SIX_CTR
     {"SetCtr",      MENU_SET_CTR       },
+#endif
+#ifdef ENABLE_FEAT_N7SIX_INV
     {"SetInv",      MENU_SET_INV       },
+#endif
     {"SetLck",      MENU_SET_LCK       },
     {"SetMet",      MENU_SET_MET       },
     {"SetGUI",      MENU_SET_GUI       },
@@ -831,7 +837,9 @@ static bool UI_MENU_IsNumericEntry(const int menu_id)
         case MENU_SQL:
         case MENU_MIC:
         case MENU_SAVE:
+#ifdef ENABLE_VOX
         case MENU_VOX:
+#endif
         case MENU_TOT:
         case MENU_AUTOLK:
         case MENU_SC_REV:
@@ -1086,6 +1094,7 @@ void UI_DisplayMenu(void)
             break;
 #endif
 
+#ifdef ENABLE_VOX
         case MENU_VOX:
             #ifdef ENABLE_VOX
                 sprintf(String, gSubMenuSelection == 0 ? gSubMenu_OFF_ON[0] : "%u", gSubMenuSelection);
@@ -1093,6 +1102,7 @@ void UI_DisplayMenu(void)
                 strcpy(String, gSubMenu_NA);
             #endif
             break;
+#endif
 
         case MENU_ABR:
             if(gSubMenuSelection == 0)
@@ -1336,21 +1346,16 @@ void UI_DisplayMenu(void)
             sprintf(String, gSubMenuSelection == 0 ? gSubMenu_OFF_ON[0] : "%u*100ms", gSubMenuSelection);
             break;
 
-        case MENU_LIST_CH:
         case MENU_S_LIST:
+        case MENU_LIST_CH:
             if (gSubMenuSelection == MR_CHANNEL_LAST + 1)
                 strcpy(String, "ALL");
-            else if (gSubMenuSelection == 0 && m == MENU_LIST_CH)
+            else if (gSubMenuSelection == 0)
                 strcpy(String, "OFF");
-            else {
-                const char *name = gListName[gSubMenuSelection - 1];
-                
-                // If first character is empty/invalid, display "N/A"
-                if (IsEmptyName(name, sizeof(gListName[0])))
-                    sprintf(String, "%02u", gSubMenuSelection);
-                else
-                    sprintf(String, "%02u (%.3s)", gSubMenuSelection, name);
-            }
+            else if (gSubMenuSelection >= 1 && gSubMenuSelection <= 3)
+                strcpy(String, gListName[gSubMenuSelection - 1]);
+            else
+                sprintf(String, "%02u", gSubMenuSelection);
             break;
             
         #ifdef ENABLE_ALARM
@@ -1603,20 +1608,14 @@ void UI_DisplayMenu(void)
             }
             // Stage 2: numeric value editing
             {
-                // Both reference editors share the same compact three-row layout.
-                uint16_t live_voltage = gBatteryVoltageAverage;
-                const char *reference = "REF  6.00V";
+                // REF is 8.40V - the fixed Li-Ion full charge calibration target
+                // LIVE shows the ACTUAL current battery voltage (dynamic from hardware ADC)
+                // SET is the ADC value the user is dialing in for the HI calibration point
+                // This allows the user to verify the battery is at the reference voltage
+                // while dialing in the corresponding ADC value
+                const char *reference = "REF  8.40V";
+                uint16_t live_voltage = gBatteryVoltageAverage;  // Actual dynamic battery voltage from hardware
                 char setText[6];
-
-                if (gBatCalTarget != 0)
-                {
-                    const uint16_t raw_voltage = (gBatteryVoltages[0] + gBatteryVoltages[1] +
-                                                  gBatteryVoltages[2] + gBatteryVoltages[3]) / 4;
-                    live_voltage = BATTERY_CalibrateRaw(raw_voltage,
-                                                        gBatteryCalibration[0],
-                                                        gSubMenuSelection);
-                    reference = "REF  8.40V";
-                }
 
                 if (gInputBoxIndex > 0)
                 {
@@ -1690,6 +1689,7 @@ void UI_DisplayMenu(void)
             strcpy(String, gSubMenu_SET_TOT[gSubMenuSelection]); // Same as SET_TOT
             break;
 
+        #ifdef ENABLE_FEAT_N7SIX_CTR
         case MENU_SET_CTR:
             #ifdef ENABLE_FEAT_N7SIX_CTR
                 sprintf(String, "%d", gSubMenuSelection);
@@ -1699,7 +1699,9 @@ void UI_DisplayMenu(void)
                 strcpy(String, gSubMenu_NA);
             #endif
             break;
+        #endif
 
+        #ifdef ENABLE_FEAT_N7SIX_INV
         case MENU_SET_INV:
             #ifdef ENABLE_FEAT_N7SIX_INV
                 strcpy(String, gSubMenu_OFF_ON[gSubMenuSelection]);
@@ -1708,6 +1710,7 @@ void UI_DisplayMenu(void)
                 strcpy(String, gSubMenu_NA);
             #endif
             break;
+        #endif
 
         case MENU_TX_LOCK:
             if(TX_freq_check(gEeprom.VfoInfo[gEeprom.TX_VFO].pTX->Frequency) == 0)

@@ -1,4 +1,4 @@
-﻿/* Copyright 2023 Dual Tachyon
+/* Copyright 2023 Dual Tachyon
  * https://github.com/DualTachyon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -44,6 +44,21 @@
 
 
 uint8_t gUnlockAllTxConfCnt;
+
+/* Only lists 1..3 have per-list priority settings. Legacy modes 0, 4 and 5,
+ * and ApeX's ALL value (MR_CHANNEL_LAST + 1), must never index these arrays.
+ * This guard changes no EEPROM offsets or field encodings; it does not establish
+ * compatibility with another firmware's interpretation of the stored values. */
+static bool MENU_GetScanListIndex(uint8_t *index)
+{
+    const uint8_t list = gEeprom.SCAN_LIST_DEFAULT;
+
+    if (list < 1 || list > 3)
+        return false;
+
+    *index = list - 1;
+    return true;
+}
 
 #ifdef ENABLE_F_CAL_MENU
     void writeXtalFreqCal(const int32_t value, const bool update_eeprom)
@@ -377,7 +392,7 @@ int MENU_GetLimits(uint8_t menu_id, int32_t *pMin, int32_t *pMax)
             break;
 
         case MENU_BATTYP:
-            //*pMin = 0;
+            *pMin = 0;
             *pMax = 4;
             break;
 
@@ -650,12 +665,20 @@ void MENU_AcceptSetting(void)
             return;
 
         case MENU_S_PRI_CH_1:
-            gEeprom.SCANLIST_PRIORITY_CH1[gEeprom.SCAN_LIST_DEFAULT - 1] = gSubMenuSelection;
+        {
+            uint8_t index;
+            if (MENU_GetScanListIndex(&index))
+                gEeprom.SCANLIST_PRIORITY_CH1[index] = gSubMenuSelection;
             break;
+        }
 
         case MENU_S_PRI_CH_2:
-            gEeprom.SCANLIST_PRIORITY_CH2[gEeprom.SCAN_LIST_DEFAULT - 1] = gSubMenuSelection;
+        {
+            uint8_t index;
+            if (MENU_GetScanListIndex(&index))
+                gEeprom.SCANLIST_PRIORITY_CH2[index] = gSubMenuSelection;
             break;
+        }
 
         case MENU_SAVE:
             gEeprom.BATTERY_SAVE = gSubMenuSelection;
@@ -775,12 +798,22 @@ void MENU_AcceptSetting(void)
             break;
 
         case MENU_S_LIST:
-            gEeprom.SCAN_LIST_DEFAULT = gSubMenuSelection;
+            // Accept only selectable list values. ALL has no priority-array
+            // slot, so per-list accesses still require MENU_GetScanListIndex().
+            if ((gSubMenuSelection >= 1 && gSubMenuSelection <= 3) ||
+                gSubMenuSelection == MR_CHANNEL_LAST + 1)
+            {
+                gEeprom.SCAN_LIST_DEFAULT = gSubMenuSelection;
+            }
             break;
 
         case MENU_S_PRI:
-            gEeprom.SCAN_LIST_ENABLED[gEeprom.SCAN_LIST_DEFAULT - 1] = gSubMenuSelection;
+        {
+            uint8_t index;
+            if (MENU_GetScanListIndex(&index))
+                gEeprom.SCAN_LIST_ENABLED[index] = gSubMenuSelection;
             break;
+        }
 
         #ifdef ENABLE_ALARM
             case MENU_AL_MOD:
@@ -979,10 +1012,12 @@ void MENU_AcceptSetting(void)
 
         case MENU_BATTYP:
             gEeprom.BATTERY_TYPE = gSubMenuSelection;
+            SETTINGS_SaveSettings();  // Save immediately to ensure persistence
             break;
 
         case MENU_SET_NAV:
             gEeprom.SET_NAV = gSubMenuSelection;
+            gRequestSaveSettings = true;
             break;
 
         case MENU_F1SHRT:
@@ -1026,9 +1061,11 @@ void MENU_AcceptSetting(void)
             gSetting_set_ctr = gSubMenuSelection;
             break;
         #endif
+        #ifdef ENABLE_FEAT_N7SIX_INV
         case MENU_SET_INV:
             gSetting_set_inv = gSubMenuSelection;
             break;
+        #endif
         case MENU_SET_LCK:
             gSetting_set_lck = gSubMenuSelection;
             break;
@@ -1092,6 +1129,28 @@ static void MENU_ClampSelection(int8_t Direction)
 {
     int32_t Min;
     int32_t Max;
+
+    /* Offer only L1, L2, L3 and ApeX's existing ALL value. The generic menu
+     * limits span 1..200, but intermediate values are not selectable lists.
+     * This cursor mapping does not change the EEPROM representation. */
+    if (UI_MENU_GetCurrentMenuId() == MENU_S_LIST)
+    {
+        const uint8_t selection = gSubMenuSelection;
+
+        /* Map the stored value onto a compact 0..3 cursor: 0 -> L1, 1 -> L2,
+         * 2 -> L3, 3 -> ALL. Anything else (0 "OFF" included) starts at L1 so
+         * the first key press always lands on a storable value. */
+        const uint8_t cursor =
+            (selection == MR_CHANNEL_LAST + 1) ? 3u :
+            (selection == 3u)                  ? 2u :
+            (selection == 2u)                  ? 1u :
+                                                 0u;
+
+        const uint8_t next = NUMBER_AddWithWraparound(cursor, Direction, 0, 3);
+
+        gSubMenuSelection = (next == 3u) ? (MR_CHANNEL_LAST + 1) : (uint8_t)(next + 1u);
+        return;
+    }
 
     if (!MENU_GetLimits(UI_MENU_GetCurrentMenuId(), &Min, &Max))
     {
@@ -1320,16 +1379,31 @@ void MENU_ShowCurrentSetting(void)
             break;
 
         case MENU_S_PRI:
-            gSubMenuSelection = gEeprom.SCAN_LIST_ENABLED[gEeprom.SCAN_LIST_DEFAULT - 1];
+        {
+            uint8_t index;
+            gSubMenuSelection = MENU_GetScanListIndex(&index)
+                ? gEeprom.SCAN_LIST_ENABLED[index]
+                : 0;
             break;
+        }
 
         case MENU_S_PRI_CH_1:
-            gSubMenuSelection = gEeprom.SCANLIST_PRIORITY_CH1[gEeprom.SCAN_LIST_DEFAULT - 1];
+        {
+            uint8_t index;
+            gSubMenuSelection = MENU_GetScanListIndex(&index)
+                ? gEeprom.SCANLIST_PRIORITY_CH1[index]
+                : 0;
             break;
+        }
 
         case MENU_S_PRI_CH_2:
-            gSubMenuSelection = gEeprom.SCANLIST_PRIORITY_CH2[gEeprom.SCAN_LIST_DEFAULT - 1];
+        {
+            uint8_t index;
+            gSubMenuSelection = MENU_GetScanListIndex(&index)
+                ? gEeprom.SCANLIST_PRIORITY_CH2[index]
+                : 0;
             break;
+        }
 
         #ifdef ENABLE_ALARM
             case MENU_AL_MOD:
@@ -1511,9 +1585,11 @@ void MENU_ShowCurrentSetting(void)
             gSubMenuSelection = gSetting_set_ctr;
             break;
         #endif
+        #ifdef ENABLE_FEAT_N7SIX_INV
         case MENU_SET_INV:
             gSubMenuSelection = gSetting_set_inv;
             break;
+        #endif
         case MENU_SET_LCK:
             gSubMenuSelection = gSetting_set_lck;
             break;

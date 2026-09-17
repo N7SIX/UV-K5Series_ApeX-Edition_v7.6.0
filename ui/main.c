@@ -260,40 +260,15 @@ static inline bool ScanProgress_GetBit(const uint8_t *map, uint16_t ch)
 
 static uint8_t ScanProgress_GetActiveScanList(void)
 {
-    const uint8_t max_scan_list = MR_CHANNEL_LAST + 1;
-    uint8_t scan_list = gEeprom.SCAN_LIST_DEFAULT;
-
-    if (scan_list == 0 || scan_list > max_scan_list)
-        scan_list = max_scan_list;
-
-    return scan_list;
+    // Keep legacy modes 0, 4 and 5 consistent with the actual scanner.
+    return gEeprom.SCAN_LIST_DEFAULT;
 }
 
 static bool ScanProgress_ChannelBelongsToList(uint16_t channel, const ChannelAttributes_t *att, uint8_t scan_list)
 {
-    if (!IS_MR_CHANNEL(channel))
-        return false;
-
-    if (att->band > BAND7_470MHz)
-        return false;
-
-    if (scan_list > MR_CHANNEL_LAST && att->scanlist1 != 0)
-        return true;
-
-    if (scan_list > 0 && att->scanlist1 == 1)
-        return true;
-
-    if (scan_list == 0 || scan_list != att->scanlist1)
-        return false;
-
-    if (gEeprom.SCAN_LIST_ENABLED[0]) {
-        const uint16_t priority1 = gEeprom.SCANLIST_PRIORITY_CH1[0];
-        const uint16_t priority2 = gEeprom.SCANLIST_PRIORITY_CH2[0];
-        if (priority1 == channel || priority2 == channel)
-            return false;
-    }
-
-    return true;
+    (void)att;
+    // Keep excluded channels in the progress map; they are marked separately.
+    return RADIO_ChannelInScanList(channel, scan_list);
 }
 
 static void ScanProgress_RebuildMemoryMap(uint8_t scan_list)
@@ -546,16 +521,18 @@ static bool UI_DrawScanProgress(void)
         if (gScanProgressMemoryTotal == 0)
             return false;
 
-        show_priority_label = gEeprom.SCAN_LIST_ENABLED[0] &&
-                              (gEeprom.SCANLIST_PRIORITY_CH1[0] < MR_CHANNEL_LAST ||
-                               gEeprom.SCANLIST_PRIORITY_CH2[0] < MR_CHANNEL_LAST);
+        const uint8_t list_index = scan_list - 1;
+        show_priority_label = scan_list >= 1 && scan_list <= 3 &&
+                              gEeprom.SCAN_LIST_ENABLED[list_index] &&
+                              (gEeprom.SCANLIST_PRIORITY_CH1[list_index] < MR_CHANNEL_LAST ||
+                               gEeprom.SCANLIST_PRIORITY_CH2[list_index] < MR_CHANNEL_LAST);
 
         if (show_priority_label) {
-            if (gEeprom.SCANLIST_PRIORITY_CH1[0] < MR_CHANNEL_LAST &&
-                gRxVfo->CHANNEL_SAVE == gEeprom.SCANLIST_PRIORITY_CH1[0])
+            if (gEeprom.SCANLIST_PRIORITY_CH1[list_index] < MR_CHANNEL_LAST &&
+                gRxVfo->CHANNEL_SAVE == gEeprom.SCANLIST_PRIORITY_CH1[list_index])
                 priority_now = 1;
-            else if (gEeprom.SCANLIST_PRIORITY_CH2[0] < MR_CHANNEL_LAST &&
-                     gRxVfo->CHANNEL_SAVE == gEeprom.SCANLIST_PRIORITY_CH2[0])
+            else if (gEeprom.SCANLIST_PRIORITY_CH2[list_index] < MR_CHANNEL_LAST &&
+                     gRxVfo->CHANNEL_SAVE == gEeprom.SCANLIST_PRIORITY_CH2[list_index])
                 priority_now = 2;
         }
 

@@ -1742,8 +1742,6 @@ void BK4819_PlayRogerMDC(bool extended)
         { BK4819_REG_72, 0x3065 },  // Set Tone-2 to 1200Hz
         { BK4819_REG_70, 0x00E0 },  // Enable Tone-2 and Set Tone2 Gain
         { BK4819_REG_5D, 0x0D00 },  // Set FSK data length to 13 bytes
-        { BK4819_REG_59, 0x8068 },  // 4 byte sync length, 6 byte preamble, clear TX FIFO
-        { BK4819_REG_59, 0x0068 },  // Same, but clear TX FIFO is now unset (clearing done)
         { BK4819_REG_5A, 0x5555 },  // First two sync bytes
         { BK4819_REG_5B, 0x55AA },  // End of sync bytes. Total 4 bytes: 555555aa
         { BK4819_REG_5C, 0xAA30 },  // Disable CRC
@@ -1755,22 +1753,42 @@ void BK4819_PlayRogerMDC(bool extended)
         BK4819_WriteRegister(RogerMDC_Configuration[i].reg, RogerMDC_Configuration[i].value);
     }
 
+    // Preamble length configuration per MDC profile.
+    // MDC-1200: standard 6-byte preamble for normal operation.
+    // MDC-1200L: extended preamble (bits <13:12> = 0b11) for improved
+    // weak-signal detection and interoperability with L-profile equipped
+    // radios that expect the longer composite preamble.
+    if (extended) {
+        // MDC-1200L: longer preamble, clear TX FIFO first then confirm
+        BK4819_WriteRegister(BK4819_REG_59, 0xB068);  // TX FIFO clear + long preamble
+        BK4819_WriteRegister(BK4819_REG_59, 0x3068);  // no TX FIFO clear + long preamble
+    } else {
+        BK4819_WriteRegister(BK4819_REG_59, 0x8068);  // TX FIFO clear + 6-byte preamble
+        BK4819_WriteRegister(BK4819_REG_59, 0x0068);  // no TX FIFO clear + 6-byte preamble
+    }
+
     // Send the data from the roger table
     for (unsigned int i = 0; i < ARRAY_SIZE(FSK_RogerTable); i++) {
         BK4819_WriteRegister(BK4819_REG_5F, FSK_RogerTable[i]);
     }
 
-    // "MDC-1200L" profile: extended pretime + longer burst hold, mirroring
-    // the L-profile's longer composite preamble (weak-signal reach).
+    // Pre-time delay before enabling TX.
+    // MDC-1200L: 120ms (longer preamble needs more settle time).
+    // MDC-1200: 20ms (standard short preamble).
     SYSTEM_DelayMs(extended ? 120 : 20);
 
-    // 4 sync bytes, 6 byte preamble, Enable FSK TX
-    BK4819_WriteRegister(BK4819_REG_59, 0x0868);
+    // Enable FSK TX with the profile-appropriate preamble.
+    // MDC-1200L: long preamble + TX enable (bits <13:12>=0b11, bit 11=1).
+    // MDC-1200: standard 6-byte preamble + TX enable (bit 11=1).
+    BK4819_WriteRegister(BK4819_REG_59, extended ? 0x3868 : 0x0868);
 
+    // Data burst duration.
+    // MDC-1200L: 260ms hold for the longer composite burst.
+    // MDC-1200: 180ms standard burst.
     SYSTEM_DelayMs(extended ? 260 : 180);
 
-    // Stop FSK TX, reset Tone-2, disable FSK
-    BK4819_WriteRegister(BK4819_REG_59, 0x0068);
+    // Stop FSK TX, reset Tone-2, disable FSK.
+    BK4819_WriteRegister(BK4819_REG_59, extended ? 0x3068 : 0x0068);
     BK4819_WriteRegister(BK4819_REG_70, 0x0000);
     BK4819_WriteRegister(BK4819_REG_58, 0x0000);
 }

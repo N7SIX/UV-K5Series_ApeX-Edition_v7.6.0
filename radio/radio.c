@@ -65,21 +65,16 @@ ModulationMode_t RADIO_GetModulationForFrequency(uint32_t frequency, ModulationM
     return RADIO_IsAirbandFrequency(frequency) ? MODULATION_AM : modulation;
 }
 
-bool RADIO_CheckValidChannel(uint16_t channel, bool checkScanList, uint8_t scanList)
+bool RADIO_ChannelInScanList(uint16_t channel, uint8_t scanList)
 {
-    // return true if the channel appears valid
     if (!IS_MR_CHANNEL(channel))
         return false;
 
     const ChannelAttributes_t att = gMR_ChannelAttributes[channel];
-
-    if (checkScanList && gMR_ChannelExclude[channel] == true)
-        return false;
-
     if (att.band > BAND7_470MHz)
         return false;
 
-    if (!checkScanList || scanList > 4)
+    if (scanList > 4)
         return true;
 
     if ((scanList == 0 && (att.scanlist1 == 1 || att.scanlist2 == 1 || att.scanlist3 == 1)) ||
@@ -90,14 +85,35 @@ bool RADIO_CheckValidChannel(uint16_t channel, bool checkScanList, uint8_t scanL
         return false;
     }
 
-    //return true;
+    // Modes 0 (unassigned channels) and 4 (union of lists) have no priority slot.
+    // Only lists 1..3 may index the three-element priority arrays.
+    if (scanList < 1 || scanList > 3)
+        return true;
 
-    // I don't understand what this code is for...
-    
-    const uint8_t PriorityCh1 = gEeprom.SCANLIST_PRIORITY_CH1[scanList - 1];
-    const uint8_t PriorityCh2 = gEeprom.SCANLIST_PRIORITY_CH2[scanList - 1];
+    const uint8_t scan_list_index = (uint8_t)(scanList - 1u);
+
+    // When priority scanning is disabled for this list its priority channels are
+    // ordinary list members again, so they must stay in the rotation. Without
+    // this guard they would be dropped here *and* never reached by the priority
+    // hop in NextMemChannel() (which is gated by the same flag), i.e. the channel
+    // would silently never be scanned. Mirrors the priority handling in
+    // ScanProgress_ChannelBelongsToList() in ui/main.c.
+    if (gEeprom.SCAN_LIST_ENABLED[scan_list_index] == false)
+        return true;
+
+    const uint8_t PriorityCh1 = gEeprom.SCANLIST_PRIORITY_CH1[scan_list_index];
+    const uint8_t PriorityCh2 = gEeprom.SCANLIST_PRIORITY_CH2[scan_list_index];
 
     return PriorityCh1 != channel && PriorityCh2 != channel;
+}
+
+bool RADIO_CheckValidChannel(uint16_t channel, bool checkScanList, uint8_t scanList)
+{
+    if (!IS_MR_CHANNEL(channel))
+        return false;
+    if (checkScanList && gMR_ChannelExclude[channel])
+        return false;
+    return RADIO_ChannelInScanList(channel, checkScanList ? scanList : 5);
 }
 
 uint8_t RADIO_FindNextChannel(uint8_t Channel, int8_t Direction, bool bCheckScanList, uint8_t VFO)

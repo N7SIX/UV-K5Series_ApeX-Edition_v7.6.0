@@ -95,23 +95,20 @@ static void toggle_chan_scanlist(void)
     {
         gMR_ChannelExclude[gTxVfo->CHANNEL_SAVE] = false;
         SETTINGS_SaveChannel(gTxVfo->CHANNEL_SAVE, gEeprom.TX_VFO, gTxVfo, 1);
-    } 
-    else 
+    }
+    else
     {
-        uint8_t scanlist = gTxVfo->SCANLIST1_PARTICIPATION;
-
-        scanlist++;
-
-        if (scanlist > MR_CHANNEL_LAST + 1)
-            scanlist = 0;
-
-        gTxVfo->SCANLIST1_PARTICIPATION = scanlist;
+        // Toggle scan list 1 participation (OFF ? L1)
+        // Simple boolean toggle matches the display capability: the main
+        // screen shows "L1" when scanlist1 is true, "OFF" when false.
+        gTxVfo->SCANLIST1_PARTICIPATION = !gTxVfo->SCANLIST1_PARTICIPATION;
 
         SETTINGS_UpdateChannel(gTxVfo->CHANNEL_SAVE, gTxVfo, true, true, true);
     }
 
     gVfoConfigureMode = VFO_CONFIGURE;
     gFlagResetVfos    = true;
+    gUpdateDisplay    = true;  // force immediate display refresh for L1/OFF/EX indicator
 }
 
 static void processFKeyFunction(const KEY_Code_t Key, const bool beep)

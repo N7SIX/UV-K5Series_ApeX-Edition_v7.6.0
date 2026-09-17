@@ -245,7 +245,8 @@ void SETTINGS_InitEEPROM(void)
 
     // 0F18..0F1F
     EEPROM_ReadBuffer(0x0F18, Data, 8);
-    gEeprom.SCAN_LIST_DEFAULT = (Data[0] < 6) ? Data[0] : 0;  // we now have 'all' channel scan option
+    // Preserve legacy modes 0..5; also accept ApeX's existing ALL value (200).
+    gEeprom.SCAN_LIST_DEFAULT = (Data[0] < 6 || Data[0] == MR_CHANNEL_LAST + 1) ? Data[0] : 0;
 
     // Fake data
     /*
