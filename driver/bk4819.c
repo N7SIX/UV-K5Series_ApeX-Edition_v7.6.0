@@ -1741,7 +1741,7 @@ void BK4819_PlayRogerMDC(void)
                                         // TX FFSK 1200/1800
         { BK4819_REG_72, 0x3065 },  // Set Tone-2 to 1200Hz
         { BK4819_REG_70, 0x00E0 },  // Enable Tone-2 and Set Tone2 Gain
-        { BK4819_REG_5D, 0x0D00 },  // Set FSK data length to 13 bytes
+        { BK4819_REG_5D, 0x0E00 },  // Set FSK data length to 14 bytes (7 words, matching FSK_RogerTable)
         { BK4819_REG_5A, 0x5555 },  // First two sync bytes
         { BK4819_REG_5B, 0x55AA },  // End of sync bytes. Total 4 bytes: 555555aa
         { BK4819_REG_5C, 0xAA30 },  // Disable CRC
@@ -1774,8 +1774,8 @@ void BK4819_PlayRogerMDC(void)
     // Unmute TX so the FSK signal is actually transmitted over the air.
     BK4819_ExitTxMute();
 
-    // Data burst duration (Motorola standard: 180ms).
-    SYSTEM_DelayMs(180);
+    // Data burst duration (~170ms, aligning with Motorola single-packet standard ~173ms).
+    SYSTEM_DelayMs(170);
 
     // Mute TX to stop FSK transmission cleanly (no glitch on air).
     BK4819_EnterTxMute();
