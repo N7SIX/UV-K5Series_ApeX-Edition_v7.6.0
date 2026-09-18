@@ -45,6 +45,12 @@
 static const uint8_t DrawingEndY  = 40;
 static const uint8_t DrawingTopY  =  8;  // Reserve top 8px for frequency display (gFrameBuffer[0])
 
+#define SPECTRUM_STEPS_MAX      128
+#define SPECTRUM_FREQ_INPUT_LEN 10
+#define SPECTRUM_STRING_BUF     32
+#define SPECTRUM_FREQ_STEP_MAX  200000
+#define SPECTRUM_FREQ_STEP_MIN  10000
+
 static const uint8_t U8RssiMap[] = {
     121,
     115,

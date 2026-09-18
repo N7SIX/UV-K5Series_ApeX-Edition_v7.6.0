@@ -41,9 +41,11 @@ bool backlightOn;
 
 void BACKLIGHT_InitHardware()
 {
-    // 48MHz / 94 / 1024 ~ 500Hz
-    const uint32_t PWM_FREQUENCY_HZ =  25000;
-    PWM_PLUS0_CLKSRC |= ((48000000 / 1024 / PWM_FREQUENCY_HZ) << 16);
+    // 48MHz / 96 / 1024 ~ 48.8Hz per count
+    // PWM frequency = 48MHz / (divider * 1024 * (PERIOD+1))
+    // For ~500Hz: divider = 48000000 / (1024 * 500) = 93.75 ≈ 94
+    const uint32_t PWM_FREQUENCY_HZ = 500;
+    PWM_PLUS0_CLKSRC |= ((48000000 / 1024 / PWM_FREQUENCY_HZ) << 16);  // = 93 (truncated)
     PWM_PLUS0_PERIOD = 1023;
 
     PORTCON_PORTB_SEL0 &= ~(0
@@ -55,15 +57,18 @@ void BACKLIGHT_InitHardware()
         | PORTCON_PORTB_SEL0_B6_BITS_PWMP0_CH0
         ;
 
-    PWM_PLUS0_GEN =     
+    PWM_PLUS0_GEN =    
         PWMPLUS_GEN_CH0_OE_BITS_ENABLE |
         PWMPLUS_GEN_CH0_OUTINV_BITS_ENABLE |
         0;
 
-    PWM_PLUS0_CFG =     
+    PWM_PLUS0_CFG =    
         PWMPLUS_CFG_CNT_REP_BITS_ENABLE |
         PWMPLUS_CFG_COUNTER_EN_BITS_ENABLE |
         0;
+
+    // Start with backlight off
+    PWM_PLUS0_CH0_COMP = 0;
 }
 
 static void BACKLIGHT_Sound(void)
@@ -81,7 +86,11 @@ static void BACKLIGHT_Sound(void)
 void BACKLIGHT_TurnOn(void)
 {
     #ifdef ENABLE_FEAT_N7SIX_SLEEP
-        gSleepModeCountdown_500ms = gSetting_set_off * 120;
+        // Validate gSetting_set_off to prevent immediate sleep mode
+        // if value is corrupted to 0
+        uint8_t sleepMinutes = gSetting_set_off;
+        if (sleepMinutes == 0) sleepMinutes = 1;  // Default to 1 minute minimum
+        gSleepModeCountdown_500ms = sleepMinutes * 120;
     #endif
 
     #ifdef ENABLE_FEAT_N7SIX
@@ -159,12 +168,12 @@ bool BACKLIGHT_IsOn()
 
 static uint8_t currentBrightness;
 
-void BACKLIGHT_SetBrightness(uint8_t brigtness)
+void BACKLIGHT_SetBrightness(uint8_t brightness)
 {
-    currentBrightness = brigtness;
-    PWM_PLUS0_CH0_COMP = value[brigtness] * 4;
-    //PWM_PLUS0_CH0_COMP = (1 << brigtness) - 1;
-    //PWM_PLUS0_SWLOAD = 1;
+    // Clamp to valid range [0..BACKLIGHT_MAX_LEVEL] matching value[] array size
+    if (brightness > BACKLIGHT_MAX_LEVEL) brightness = BACKLIGHT_MAX_LEVEL;
+    currentBrightness = brightness;
+    PWM_PLUS0_CH0_COMP = value[brightness] * 4;
 }
 
 uint8_t BACKLIGHT_GetBrightness(void)

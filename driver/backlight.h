@@ -20,8 +20,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define BACKLIGHT_MAX_LEVEL 10
+#define BACKLIGHT_MIN_VISIBLE 4
+
 extern uint16_t gBacklightCountdown_500ms;
 extern uint8_t gBacklightBrightness;
+extern uint8_t gBacklightBrightnessOld;
 
 #ifdef ENABLE_FEAT_N7SIX
     extern const uint8_t value[11];
@@ -43,7 +47,7 @@ void BACKLIGHT_InitHardware();
 void BACKLIGHT_TurnOn();
 void BACKLIGHT_TurnOff();
 bool BACKLIGHT_IsOn();
-void BACKLIGHT_SetBrightness(uint8_t brigtness);
+void BACKLIGHT_SetBrightness(uint8_t brightness);
 uint8_t BACKLIGHT_GetBrightness(void);
 
 #endif

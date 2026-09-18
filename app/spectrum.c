@@ -1,4 +1,4 @@
-﻿/* Copyright 2023 fagci
+/* Copyright 2023 fagci
  * https://github.com/fagci
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -80,14 +80,14 @@ static uint32_t initialFreq;
 static char String[32];
 
 static bool isInitialized = false;
-bool isListening = true;
-bool monitorMode = false;
-bool redrawStatus = true;
-bool redrawScreen = false;
-bool newScanStart = true;
-bool preventKeypress = true;
-bool audioState = true;
-bool lockAGC = false;
+static bool isListening = true;
+static bool monitorMode = false;
+static bool redrawStatus = true;
+static bool redrawScreen = false;
+static bool newScanStart = true;
+static bool preventKeypress = true;
+static bool audioState = true;
+static bool lockAGC = false;
 
 State currentState = SPECTRUM, previousState = SPECTRUM;
 
@@ -135,7 +135,7 @@ static uint8_t  peakHoldAge[64];      // Shared decay timer (1 per 2 columns)
 static uint16_t scanReg30 = 0;
 
 #if ENABLE_SPECTRUM_BIDIR
-// Bidirectional sweep: true = left→right (fStart→fEnd), false = right→left.
+// Bidirectional sweep: true = left?right (fStart?fEnd), false = right?left.
 static bool scanForward = true;
 // Alternate sweep start side across full sweep cycles to reduce directional bias.
 static bool scanStartFromLeft = true;
@@ -362,7 +362,7 @@ static void SetRegMenuValue(uint8_t st, bool add)
 //
 // NOTE: when ENABLE_FEAT_N7SIX is defined, PutPixel / PutPixelStatus /
 // GUI_DisplaySmallest are provided by ui/helper.c and declared (non-static)
-// in ui/helper.h — so we must NOT define our own static copies here.
+// in ui/helper.h � so we must NOT define our own static copies here.
 #ifndef ENABLE_FEAT_N7SIX
 static void PutPixel(uint8_t x, uint8_t y, bool fill)
 {
@@ -412,7 +412,7 @@ static int clamp(int v, int min, int max)
     return v <= min ? min : (v >= max ? max : v);
 }
 
-static uint16_t my_abs(int16_t v) { return v < 0 ? (uint16_t)(-v) : (uint16_t)v; }
+static uint16_t abs_int16(int16_t v) { return v < 0 ? (uint16_t)(-(uint32_t)v) : (uint16_t)v; }
 
 void SetState(State state)
 {
@@ -542,7 +542,7 @@ static void EnableListenAudio(void)
     SYSTICK_DelayUs(50);
 }
 
-// Full mute for the sweep phase — the mirror image of EnableListenAudio().
+// Full mute for the sweep phase � the mirror image of EnableListenAudio().
 static void DisableListenAudio(void)
 {
     BK4819_SetAF(BK4819_AF_MUTE);  // REG_47 <11:8> = 0 -> no demodulator
@@ -797,7 +797,7 @@ static void ResetScanStats()
     scanInfo.fPeak = 0;
 }
 
-// Resets scan position and stats without touching the radio — safe to call
+// Resets scan position and stats without touching the radio � safe to call
 // on every sweep restart because scanReg30 and the RF filter path remain
 // valid as long as the scan range hasn't changed.
 static void InitScanPosition()
@@ -954,14 +954,14 @@ static void AutoTriggerLevel()
     // Faster convergence when the gap is large (e.g. after filter BW change).
     int16_t diff  = (int16_t)target - (int16_t)settings.rssiTriggerLevel;
     bool diffSign = diff < 0;
-    uint16_t absDiff = my_abs(diff);
+    uint16_t absDiff = abs_int16(diff);
 
     if (absDiff > 4)
     {
         int16_t step = (absDiff > 12) ? 4 : ((absDiff > 6) ? 2 : 1);
         settings.rssiTriggerLevel += diffSign ? -step : step;
     }
-    // Dead zone ±4: hold steady to avoid jitter near target
+    // Dead zone �4: hold steady to avoid jitter near target
 
     if (settings.rssiTriggerLevel != oldTrigger)
         redrawStatus = true;
@@ -1257,7 +1257,7 @@ static void UpdateFreqChangeStep(bool inc)
     {
         settings.frequencyChangeStep -= diff;
     }
-    SYSTEM_DelayMs(100);
+    // Removed blocking SYSTEM_DelayMs(100) - let UI update naturally
     redrawScreen = true;
 }
 
@@ -1290,13 +1290,20 @@ static void ToggleModulation()
 
 static void ToggleListeningBW()
 {
-    if (settings.listenBw == BK4819_FILTER_BW_NARROWER)
+    switch (settings.listenBw)
     {
-        settings.listenBw = BK4819_FILTER_BW_WIDE;
-    }
-    else
-    {
-        settings.listenBw++;
+        case BK4819_FILTER_BW_WIDE:
+            settings.listenBw = BK4819_FILTER_BW_NARROW;
+            break;
+        case BK4819_FILTER_BW_NARROW:
+            settings.listenBw = BK4819_FILTER_BW_NARROWER;
+            break;
+        case BK4819_FILTER_BW_NARROWER:
+            settings.listenBw = BK4819_FILTER_BW_WIDE;
+            break;
+        default:
+            settings.listenBw = BK4819_FILTER_BW_WIDE;
+            break;
     }
     redrawScreen = true;
 }
@@ -1306,13 +1313,11 @@ static void ToggleBacklight()
     settings.backlightState = !settings.backlightState;
     if (settings.backlightState)
     {
-        // BACKLIGHT_TurnOn();
-        BACKLIGHT_SetBrightness(gEeprom.BACKLIGHT_MAX);
+        BACKLIGHT_TurnOn();
     }
     else
     {
-        // BACKLIGHT_TurnOff();
-        BACKLIGHT_SetBrightness(gEeprom.BACKLIGHT_MIN);
+        BACKLIGHT_TurnOff();
     }
 }
 
@@ -1322,11 +1327,15 @@ static void ToggleStepsCount()
     {
         settings.stepsCount = STEPS_16;
     }
-    else
+    else if (settings.stepsCount > STEPS_16)
     {
         settings.stepsCount--;
     }
-    settings.frequencyChangeStep = GetBW() >> 1;
+    // else: already at minimum (STEPS_16), do nothing
+
+    uint16_t bw = GetBW();
+    // Guard against division-by-zero / degenerate step behavior
+    settings.frequencyChangeStep = (bw > 1) ? (bw >> 1) : bw;
     RelaunchScan();
     ResetBlacklist();
     redrawScreen = true;
@@ -1705,7 +1714,7 @@ static void BuildCurrentSpectrumTopY(uint8_t *topY)
     BuildSpectrumTopY(topY, bars);
 #if ENABLE_SPECTRUM_SMOOTHING
     // Skip cosmetic smoothing in manual mode so the rendered curve matches
-    // the raw RSSI used by the squelch detector — narrow peaks must visibly
+    // the raw RSSI used by the squelch detector � narrow peaks must visibly
     // cross the trigger line when the radio opens the squelch.
     if (!manualSetFlag)
         SmoothTopY(topY);
@@ -1988,7 +1997,7 @@ static void DrawArrow(uint8_t x)
         signed v = x + i;
         if (!(v & 128))
         {
-            gFrameBuffer[5][v] |= (0b01111000 << my_abs(i)) & 0b01111000;
+            gFrameBuffer[5][v] |= (0b01111000 << abs_int16(i)) & 0b01111000;
         }
     }
 }
@@ -2309,7 +2318,7 @@ static void Render()
         break;
     }
 
-    // Display blit is done incrementally (one page per tick) — see Tick().
+    // Display blit is done incrementally (one page per tick) � see Tick().
 }
 
 static bool HandleUserInput()
@@ -2556,7 +2565,7 @@ static void UpdateStill()
     preventKeypress = false;
 
     peak.rssi = scanInfo.rssi;
-    // EMA α=0.25 for display only; seed on first sample
+    // EMA a=0.25 for display only; seed on first sample
     rssiSmoothed = rssiSmoothed ? (rssiSmoothed * 3 + scanInfo.rssi) >> 2
                                 : scanInfo.rssi;
     AutoTriggerLevel();
@@ -2570,7 +2579,7 @@ static void UpdateListening()
 {
     preventKeypress = false;
 
-    // listenT counts down with 1ms delay per tick — no SPI during this phase.
+    // listenT counts down with 1ms delay per tick � no SPI during this phase.
     // Audio simply plays from the AF route armed by ToggleRX(true); nothing
     // extra is polled here so the SPI bus stays quiet while listening.
     if (listenT)
@@ -2581,7 +2590,7 @@ static void UpdateListening()
     }
 
     // --- Single SPI burst: all BK4819 accesses happen here, once per
-    // listenT expiry.  SPI repeats at a few Hz — below the audible range.
+    // listenT expiry.  SPI repeats at a few Hz � below the audible range.
     // Between bursts the bus is completely silent.
 
 #ifdef ENABLE_FEAT_F4HWN_SPECTRUM

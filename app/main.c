@@ -137,6 +137,7 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
             #ifdef ENABLE_FMRADIO
                 ACTION_FM();
             #endif
+            gWasFKeyPressed = false;
             break;
 
         case KEY_1:
@@ -146,6 +147,7 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
 #ifdef ENABLE_COPY_CHAN_TO_VFO
                 if (!gEeprom.VFO_OPEN || gCssBackgroundScan) {
                     gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
+                    gWasFKeyPressed = false;
                     return;
                 }
 
@@ -154,6 +156,7 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
                         gRxReceptionMode == RX_MODE_NONE      ||
                         gScanPauseDelayIn_10ms == 0)
                     {   // scan is running (not paused)
+                        gWasFKeyPressed = false;
                         return;
                     }
                 }
@@ -178,12 +181,14 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
                     gUpdateDisplay = true;
                 }
 #endif
+                gWasFKeyPressed = false;
                 return;
             }
 
 #ifdef ENABLE_WIDE_RX
             if(gTxVfo->Band == BAND7_470MHz && gTxVfo->pRX->Frequency < _1GHz_in_KHz) {
                     gTxVfo->pRX->Frequency = _1GHz_in_KHz;
+                    gWasFKeyPressed = false;
                     return;
             }
 #endif
@@ -205,6 +210,7 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
 
             gRequestDisplayScreen      = DISPLAY_MAIN;
 
+            gWasFKeyPressed = false;
             break;
 
         case KEY_2:
@@ -212,6 +218,7 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
                 gVfoConfigureMode     = VFO_CONFIGURE;
             #endif
             COMMON_SwitchVFOs();
+            gWasFKeyPressed = false;
             break;
 
         case KEY_3:
@@ -220,6 +227,7 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
             #endif
             COMMON_SwitchVFOMode();
 
+            gWasFKeyPressed = false;
             break;
 
         case KEY_4:
@@ -230,6 +238,7 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
 
             SCANNER_Start(false);
             gRequestDisplayScreen = DISPLAY_SCANNER;
+            gWasFKeyPressed = false;
             break;
 
         case KEY_5:
@@ -255,10 +264,12 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
                 toggle_chan_scanlist();
             }
 
+            gWasFKeyPressed = false;
             break;
 
         case KEY_6:
             ACTION_Power();
+            gWasFKeyPressed = false;
             break;
 
 		case KEY_7:
@@ -268,6 +279,7 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
             ACTION_Vox();
 #endif
 
+            gWasFKeyPressed = false;
             break;
 
         case KEY_8:
@@ -279,6 +291,7 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
                 gRequestSaveChannel = 1;
             }
 
+            gWasFKeyPressed = false;
             break;
 
         case KEY_9:
@@ -299,6 +312,7 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
                 }
             }
 
+            gWasFKeyPressed = false;
             break;
 
 #ifdef ENABLE_FEAT_N7SIX // Set Squelch F + UP or Down and Step F + SIDE1 or F + SIDE2
