@@ -759,11 +759,49 @@ void MENU_AcceptSetting(void)
             break;
 
         case MENU_LIST_CH:
-            gTxVfo->SCANLIST1_PARTICIPATION = gSubMenuSelection;
+        {   // Assign the current memory channel to a scan list.
+
+            /* ChList maps a single selection value onto the three per-channel
+             * participation booleans that live in VFO_Info_t and are persisted
+             * as ChannelAttributes_t bits in EEPROM (0x0D60+).  The display
+             * uses 0 = OFF, 1 = L1, 2 = L2, 3 = L3, MR_CHANNEL_LAST + 1 = ALL.
+             * Writing the raw selection into one boolean (as the old code did)
+             * corrupts the VFO struct and never touches lists 2 or 3. */
+            bool sl1 = false, sl2 = false, sl3 = false;
+
+            if (gSubMenuSelection == MR_CHANNEL_LAST + 1)
+            {                                   // ALL
+                sl1 = true;
+                sl2 = true;
+                sl3 = true;
+            }
+            else if (gSubMenuSelection == 1)
+            {                                   // L1
+                sl1 = true;
+            }
+            else if (gSubMenuSelection == 2)
+            {                                   // L2
+                sl2 = true;
+            }
+            else if (gSubMenuSelection == 3)
+            {                                   // L3
+                sl3 = true;
+            }
+            else
+            {                                   // 0 or anything unexpected -> OFF
+                sl1 = false;
+                sl2 = false;
+                sl3 = false;
+            }
+
+            gTxVfo->SCANLIST1_PARTICIPATION = sl1;
+            gTxVfo->SCANLIST2_PARTICIPATION = sl2;
+            gTxVfo->SCANLIST3_PARTICIPATION = sl3;
             SETTINGS_UpdateChannel(gTxVfo->CHANNEL_SAVE, gTxVfo, true, false, true);
             gVfoConfigureMode = VFO_CONFIGURE;
             gFlagResetVfos    = true;
             return;
+        }
 
         case MENU_STE:
             gEeprom.TAIL_TONE_ELIMINATION = gSubMenuSelection;
@@ -1133,22 +1171,43 @@ static void MENU_ClampSelection(int8_t Direction)
     /* Offer only L1, L2, L3 and ApeX's existing ALL value. The generic menu
      * limits span 1..200, but intermediate values are not selectable lists.
      * This cursor mapping does not change the EEPROM representation. */
-    if (UI_MENU_GetCurrentMenuId() == MENU_S_LIST)
+    const int menu_id = UI_MENU_GetCurrentMenuId();
+
+    if (menu_id == MENU_S_LIST || menu_id == MENU_LIST_CH)
     {
         const uint8_t selection = gSubMenuSelection;
 
-        /* Map the stored value onto a compact 0..3 cursor: 0 -> L1, 1 -> L2,
-         * 2 -> L3, 3 -> ALL. Anything else (0 "OFF" included) starts at L1 so
-         * the first key press always lands on a storable value. */
-        const uint8_t cursor =
-            (selection == MR_CHANNEL_LAST + 1) ? 3u :
-            (selection == 3u)                  ? 2u :
-            (selection == 2u)                  ? 1u :
-                                                 0u;
+        if (menu_id == MENU_S_LIST)
+        {
+            /* Map the stored value onto a compact 0..3 cursor: 0 -> L1, 1 -> L2,
+             * 2 -> L3, 3 -> ALL. Anything else (0 "OFF" included) starts at L1 so
+             * the first key press always lands on a storable value. */
+            const uint8_t cursor =
+                (selection == MR_CHANNEL_LAST + 1) ? 3u :
+                (selection == 3u)                  ? 2u :
+                (selection == 2u)                  ? 1u :
+                                                     0u;
 
-        const uint8_t next = NUMBER_AddWithWraparound(cursor, Direction, 0, 3);
+            const uint8_t next = NUMBER_AddWithWraparound(cursor, Direction, 0, 3);
 
-        gSubMenuSelection = (next == 3u) ? (MR_CHANNEL_LAST + 1) : (uint8_t)(next + 1u);
+            gSubMenuSelection = (next == 3u) ? (MR_CHANNEL_LAST + 1) : (uint8_t)(next + 1u);
+        }
+        else
+        {
+            /* ChList: cycle only the five meaningful states instead of walking
+             * all 201 raw values. Cursor 0..4 -> OFF, L1, L2, L3, ALL; any raw
+             * value outside the symbolic set snaps to the nearest state. */
+            const uint8_t cursor =
+                (selection == MR_CHANNEL_LAST + 1) ? 4u :
+                (selection == 3u)                  ? 3u :
+                (selection == 2u)                  ? 2u :
+                (selection == 1u)                  ? 1u :
+                                                     0u;
+
+            const uint8_t next = NUMBER_AddWithWraparound(cursor, Direction, 0, 4);
+
+            gSubMenuSelection = (next == 4u) ? (MR_CHANNEL_LAST + 1) : next;
+        }
         return;
     }
 
@@ -1345,8 +1404,31 @@ void MENU_ShowCurrentSetting(void)
             break;
 
         case MENU_LIST_CH:
-            gSubMenuSelection = gTxVfo->SCANLIST1_PARTICIPATION;
+        {   // Restore the channel's list assignment from all three participation
+            // bits. The old code read only SCANLIST1_PARTICIPATION, so a channel
+            // in L2/L3/ALL re-opened this menu as "OFF"/"L1" and accepting the
+            // unchanged value silently rewrote its real assignment.
+            const bool sl1 = gTxVfo->SCANLIST1_PARTICIPATION;
+            const bool sl2 = gTxVfo->SCANLIST2_PARTICIPATION;
+            const bool sl3 = gTxVfo->SCANLIST3_PARTICIPATION;
+
+            if (sl1 && sl2 && sl3)
+                gSubMenuSelection = MR_CHANNEL_LAST + 1;    // ALL
+            else if (sl1)
+                gSubMenuSelection = 1;                      // L1
+            else if (sl2)
+                gSubMenuSelection = 2;                      // L2
+            else if (sl3)
+                gSubMenuSelection = 3;                      // L3
+            else
+                gSubMenuSelection = 0;                      // OFF
+
+            /* Mixed two-list states (set externally, e.g. via CPS) cannot be
+             * represented by a single symbolic value; the lowest matching list
+             * is shown. Accepting rewrites all three bits, which is only done
+             * on an explicit user MENU press. */
             break;
+        }
 
         case MENU_STE:
             gSubMenuSelection = gEeprom.TAIL_TONE_ELIMINATION;
@@ -1797,6 +1879,15 @@ static void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
     }
 
     const int m = UI_MENU_GetCurrentMenuId();
+
+    if (m == MENU_LIST_CH)
+    {   // ChList's value is symbolic (OFF/L1/L2/L3/ALL) and its cursor cycles
+        // only five states - numeric entry would only stage meaningless raw
+        // values, so reject digits outright.
+        gInputBoxIndex = 0;
+        gBeepToPlay    = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
+        return;
+    }
 
     if (m == MENU_MEM_CH ||
         m == MENU_DEL_CH ||

@@ -22,10 +22,12 @@ $code = @'
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #define MR_CHANNEL_LAST 199u
 #define BAND7_470MHz 6
 #define IS_MR_CHANNEL(ch) ((ch) <= MR_CHANNEL_LAST)
 #define MENU_S_LIST 1
+#define MENU_LIST_CH 2
 // Minimal host fixtures; no hardware or EEPROM writes.
 typedef struct { uint8_t band, scanlist1, scanlist2, scanlist3; } ChannelAttributes_t;
 static ChannelAttributes_t gMR_ChannelAttributes[200];
@@ -36,11 +38,12 @@ static struct {
     uint8_t SCANLIST_PRIORITY_CH1[3], SCANLIST_PRIORITY_CH2[3];
 } gEeprom;
 static int32_t gSubMenuSelection;
-static int UI_MENU_GetCurrentMenuId(void) { return MENU_S_LIST; }
+static int g_menu_id_fixture = MENU_S_LIST;
+static int UI_MENU_GetCurrentMenuId(void) { return g_menu_id_fixture; }
 static int MENU_GetLimits(int id, int32_t *min, int32_t *max) {
     (void)id; *min=1; *max=200; return 0;
 }
-// Wrap helper fixture; tested menu always passes a cursor in 0..3.
+// Wrap helper fixture; tested menus pass a compact cursor (0..3 or 0..4).
 static int NUMBER_AddWithWraparound(int n, int d, int min, int max) {
     n += d; return n < min ? max : n > max ? min : n;
 }
@@ -50,9 +53,32 @@ $code += "`n" + (Extract-Function 'app/menu.c' 'static void MENU_ClampSelection(
 $code += "`n" + (Extract-Function 'radio/radio.c' 'bool RADIO_ChannelInScanList(')
 $code += "`n" + (Extract-Function 'radio/radio.c' 'bool RADIO_CheckValidChannel(')
 $code += "`n" + (Extract-Function 'ui/main.c' 'static bool ScanProgress_ChannelBelongsToList(')
+$code += "`n" + (Extract-Function 'ui/main.c' 'static const char *UI_ScanListBadgeText(')
 $code += @'
 
 int main(void) {
+    // ChList (MENU_LIST_CH): five-state cycle OFF,L1,L2,L3,ALL.
+    g_menu_id_fixture = MENU_LIST_CH;
+    {
+        const int cycle[] = {0,1,2,3,200};
+        for (int i=0;i<5;i++) {
+            gSubMenuSelection=cycle[i]; MENU_ClampSelection(1);
+            assert(gSubMenuSelection==cycle[(i+1)%5]);
+            gSubMenuSelection=cycle[i]; MENU_ClampSelection(-1);
+            assert(gSubMenuSelection==cycle[(i+4)%5]);
+        }
+        // Any raw/unexpected value snaps to a symbolic state on first press.
+        for (int raw=0;raw<256;raw++) {
+            for (int d=-1;d<=1;d+=2) {
+                gSubMenuSelection=raw; MENU_ClampSelection(d);
+                assert(gSubMenuSelection==0 || gSubMenuSelection==1 ||
+                       gSubMenuSelection==2 || gSubMenuSelection==3 ||
+                       gSubMenuSelection==200);
+            }
+        }
+    }
+    // ScList (MENU_S_LIST): four-state cycle L1,L2,L3,ALL.
+    g_menu_id_fixture = MENU_S_LIST;
     const int cycle[] = {1,2,3,200};
     for (int i=0;i<4;i++) {
         gSubMenuSelection=cycle[i]; MENU_ClampSelection(1);
@@ -96,7 +122,21 @@ int main(void) {
         }
     }
     assert(!RADIO_CheckValidChannel(200,true,200));
-    printf("PASS: bidirectional cycle, 256 index/selection cases, %u filter/progress cases\n",checks);
+    // Main-screen scan-list badge: exact label for all 8 participation-bit
+    // combinations, each also with the channel excluded (must show EX).
+    {
+        static const char *const expected[8] = {
+            "OFF", "L1", "L2", "L12", "L3", "L13", "L23", "ALL"
+        };
+        for (unsigned mask=0;mask<8;mask++) {
+            ChannelAttributes_t a=(ChannelAttributes_t){0,!!(mask&1),!!(mask&2),!!(mask&4)};
+            const char *label=UI_ScanListBadgeText(&a,false);
+            assert(strcmp(label,expected[mask])==0);
+            assert(strlen(label)<=3);
+            assert(strcmp(UI_ScanListBadgeText(&a,true),"EX")==0);
+        }
+    }
+    printf("PASS: ChList+ScList bidirectional cycles, 256 index/selection cases, %u filter/progress cases, 8x2 badge labels\n",checks);
     return 0;
 }
 '@

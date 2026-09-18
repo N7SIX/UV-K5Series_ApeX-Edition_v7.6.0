@@ -99,8 +99,9 @@ static void toggle_chan_scanlist(void)
     else
     {
         // Toggle scan list 1 participation (OFF ? L1)
-        // Simple boolean toggle matches the display capability: the main
-        // screen shows "L1" when scanlist1 is true, "OFF" when false.
+        // Quick toggle: only list-1 participation flips. The main-screen badge
+        // shows the full assignment (L2/L3/multi/ALL/OFF/EX), so memberships
+        // set here, in ChList or via CPS stay visible and are preserved.
         gTxVfo->SCANLIST1_PARTICIPATION = !gTxVfo->SCANLIST1_PARTICIPATION;
 
         SETTINGS_UpdateChannel(gTxVfo->CHANNEL_SAVE, gTxVfo, true, true, true);

@@ -517,8 +517,7 @@ const char* const gSubMenu_ROGER[] =
 {
     "OFF",
     "ROGER",
-    "MDC-1200",
-    "MDC-1200L"
+    "MDC-1200"
 };
 
 const char* const gSubMenu_RESET[] =

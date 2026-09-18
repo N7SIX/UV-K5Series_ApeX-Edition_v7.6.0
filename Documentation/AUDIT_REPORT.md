@@ -363,3 +363,43 @@ Build verification and remediation performed on 2026-09-14 after the original st
 2. **UART regression on hardware**: k5prog/CHIRP read/write, session init (0x052F), RSSI commands.
 3. **M8** EEPROM sync tool region table; **H3** binary↔source traceability via CI rebuild.
 4. Band-edge TX, TOT alert timing and spectrum soak tests (P2 in §7) still need to be run on silicon.
+
+## 8. ChList (MENU_LIST_CH) logic audit — fixed
+
+"ChList" (MENU_LIST_CH) is the per-channel scan-list assignment menu. Static review found the
+original implementation did not function for its purpose: the accept path wrote the raw selection
+value into a *boolean* VFO field (`SCANLIST1_PARTICIPATION`) instead of mapping the symbolic
+selection onto the three per-channel participation bits, so choosing L2/L3/ALL silently corrupted
+the VFO struct and never touched lists 2 or 3.
+
+### Findings and fixes (all in `app/menu.c`; verified by `tools/test_sclist.ps1` and an
+arm-none-eabi-gcc compile of the translation unit under `-Wall -Werror -Wextra`)
+
+| ID | Defect (original) | Fix applied |
+|----|-------------------|-------------|
+| CH1 | `MENU_AcceptSetting` case MENU_LIST_CH wrote `gSubMenuSelection` into `SCANLIST1_PARTICIPATION` (bool). Selecting L2 (=2) or L3 (=3) produced corrupted truthy state; ALL (=200) likewise; L2/L3 bits were never written. | Selection is now mapped onto all three participation bits: OFF(0)=none, L1/L2/L3=that bit, ALL(`MR_CHANNEL_LAST + 1`)=all three; anything unexpected snaps to OFF. The existing `SETTINGS_UpdateChannel(...)` persist call is unchanged. |
+| CH2 | `MENU_ShowCurrentSetting` restored the value from `SCANLIST1_PARTICIPATION` only, so a channel already in L2/L3/ALL re-opened the menu as "OFF"/"L1"; pressing MENU without changing anything silently rewrote its real assignment (silent data corruption on plain accept). | Restore now reconstructs the symbolic value from all three bits: all three = ALL, else the first matching list = L1/L2/L3, none = OFF. Mixed two-list states (settable only via CPS) display the lowest matching list; the bits are rewritten only on an explicit accept. |
+| CH3 | `MENU_ClampSelection` walked the generic 0..200 limit range, forcing the user to scroll ~195 meaningless raw values (4..199) between L3 and ALL. | MENU_LIST_CH now cycles exactly the five symbolic states OFF -> L1 -> L2 -> L3 -> ALL (wrap in both directions). The ScList (MENU_S_LIST) cycle is preserved and the behavior is shared in one branch. |
+| CH4 | Numeric key entry fell through to the generic 4-digit channel path and staged raw values (e.g. "05") that the symbolic display rendered misleadingly. | Digits are rejected in MENU_LIST_CH with the standard error beep; arrow navigation is the only input path, matching the symbolic value set. |
+| CH5 | The main-screen channel badge (`ui/main.c`) showed only "L1" or "OFF" because it checked `scanlist1` alone — after CH1/CH2 a channel in L2/L3/ALL still read "OFF" on the main display, hiding its real assignment. | Badge now derives its label from all three participation bits (`UI_ScanListBadgeText`): OFF, L1, L2, L3, L12/L13/L23 (two-list states settable only via CPS), ALL (same wording as the status-bar ScList indicator), and EX for excluded channels. All labels are ≤3 characters in the 3x5 small font — identical pixel footprint to the previous "OFF", so the inverse capsule and layout are unchanged. The quick list-1 side-key toggle is unaffected. |
+
+### EEPROM / display compatibility
+
+No EEPROM offsets, field encodings, or bit layouts changed. The UI display (`ui/menu.c`,
+MENU_S_LIST / MENU_LIST_CH case) and the main-screen scan-list symbols already understood the
+0/1/2/3/ALL encoding; these fixes align the menu logic with the rest of the firmware instead of
+introducing a new format.
+
+### Verification
+
+- `tools/test_sclist.ps1` (host harness, no hardware or EEPROM writes): extended to cover ChList —
+  bidirectional 5-state cycle, restore mapping across all 8 participation-bit combinations, the
+  per-list index guard (256 cases), and scanner filter/progress consistency (4096 cases). Result:
+  **PASS**.
+- `app/menu.c` compiled standalone with the Makefile flags (`-std=c2x -Wall -Wextra -Werror`,
+  arm-none-eabi-gcc): **clean**.
+- Main-screen badge mapping (`ui/main.c` `UI_ScanListBadgeText`): verified for all 8
+  participation-bit combinations, each with and without channel exclusion (16 cases) — **PASS**.
+- `ui/main.c` compiled standalone with the Makefile default-config flags (`-std=c2x -Wall -Werror`,
+  arm-none-eabi-gcc, `ENABLE_FEAT_N7SIX` on): **clean**.
+

@@ -132,6 +132,19 @@ Below are the actual icons as they appear on the radio's display, represented in
 
 *Note: Icons are shown as they appear on the radio's monochrome LCD. Actual appearance may vary slightly.*
 
+### Channel-mode scan-list badge
+
+In channel (MR) mode, the small inverted badge at the top-right of each VFO line
+shows the channel's scan-list assignment (set in **Menu > ChList**, or via CPS):
+
+| Badge | Meaning |
+|-------|---------|
+| `L1` / `L2` / `L3` | Channel belongs to scan list 1 / 2 / 3 |
+| `L12` / `L13` / `L23` | Channel belongs to two lists (assignable via CPS) |
+| `ALL` | Channel belongs to all three lists |
+| `OFF` | Channel belongs to no scan list (skipped by the scanner) |
+| `EX` | Channel is excluded from scanning |
+
 ---
 
 

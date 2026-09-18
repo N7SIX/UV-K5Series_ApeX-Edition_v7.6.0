@@ -1306,6 +1306,39 @@ static void UI_PrintScanRangeCss(char *String, uint8_t LabelX, uint8_t ValueX, u
 }
 #endif
 
+/* Main-screen scan-list badge for channel mode. Returns a label of at most
+ * three 3x5-font characters (12 px at 4 px advance) - the same width as the
+ * previous "OFF" text, so the inverse capsule geometry is unchanged.
+ * Wording: OFF  = in no scan list,
+ *          L1/L2/L3 = in exactly that list,
+ *          L12/L13/L23 = in two lists (only reachable via CPS),
+ *          ALL = in all three lists (same wording as the status-bar ScList
+ *          indicator),
+ *          EX  = channel excluded from scanning (gMR_ChannelExclude). */
+static const char *UI_ScanListBadgeText(const ChannelAttributes_t *att, bool excluded)
+{
+    unsigned lists;
+
+    if (excluded)
+        return "EX";
+
+    lists = (att->scanlist1 ? 1u : 0u) |
+            (att->scanlist2 ? 2u : 0u) |
+            (att->scanlist3 ? 4u : 0u);
+
+    switch (lists)
+    {
+        case 1u: return "L1";
+        case 2u: return "L2";
+        case 3u: return "L12";
+        case 4u: return "L3";
+        case 5u: return "L13";
+        case 6u: return "L23";
+        case 7u: return "ALL";
+        default: return "OFF";
+    }
+}
+
 void UI_DisplayMain(void)
 {
     char               String[22];
@@ -1708,23 +1741,12 @@ void UI_DisplayMain(void)
 
                 const ChannelAttributes_t* att = &gMR_ChannelAttributes[gEeprom.ScreenChannel[vfo_num]];
 
-                const char *displayStr;
-                uint8_t xStart = 113; // 3-char name aligned left
-
-                if(gMR_ChannelExclude[gEeprom.ScreenChannel[vfo_num]] == false)
-                {
-                    // show the scan list assigment symbols
-                    if(att->scanlist1) {
-                        displayStr = "L1";
-                    } else {
-                        displayStr = "OFF";
-                    }
-                }
-                else
-                {
-                    displayStr = "EX";
-                    xStart = 117;
-                }
+                // Show the scan-list assignment badge. UI_ScanListBadgeText
+                // derives the label from all three participation bits, so the
+                // main screen reflects exactly what ChList stores.
+                const bool        excluded   = gMR_ChannelExclude[gEeprom.ScreenChannel[vfo_num]];
+                const char *const displayStr = UI_ScanListBadgeText(att, excluded);
+                const uint8_t     xStart     = excluded ? 117 : 113; // EX is 2-char and centers; badge is left-aligned
 
 #ifdef ENABLE_FEAT_N7SIX
                 GUI_DisplaySmallestInverse(displayStr, xStart + 2, line, false, true, 127);  
