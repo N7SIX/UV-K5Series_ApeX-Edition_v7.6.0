@@ -45,6 +45,19 @@ ENABLE_WATERFALL                ?= 0
 # Peak hold trace (saves ~500 bytes when disabled)
 ENABLE_SPECTRUM_PEAK_HOLD       ?= 0
 # Curve smoothing (saves ~300 bytes when disabled)
+ENABLE_SPECTRUM_SMOOTH          ?= 0
+# Checkerboard body shade under the spectrum trace (saves FLASH when disabled)
+ENABLE_SPECTRUM_SHADE           ?= 1
+# Interlaced sweeps for >128-step scan ranges
+ENABLE_SPECTRUM_INTERLACE       ?= 0
+# KEY_SIDE1 blacklist of noisy frequencies
+ENABLE_SPECTRUM_BLACKLIST       ?= 0
+# Square-root RSSI compression (saves ~300 bytes when disabled)
+ENABLE_SPECTRUM_RSSI_SQRT       ?= 0
+# STILL-mode LNA/LNA/VGA register menu (saves ~700 bytes when disabled)
+ENABLE_SPECTRUM_REG_MENU        ?= 0
+# Bidirectional sweep (alternating start side; saves ~400 bytes when disabled)
+ENABLE_SPECTRUM_BIDIR           ?= 0
 
 #############################################################
 # ---- FLASH BUDGET ----
@@ -401,6 +414,11 @@ ifeq ($(ENABLE_SPECTRUM_SMOOTH),1)
 	CFLAGS += -DENABLE_SPECTRUM_SMOOTHING=1
 else
 	CFLAGS += -DENABLE_SPECTRUM_SMOOTHING=0
+endif
+ifeq ($(ENABLE_SPECTRUM_SHADE),1)
+	CFLAGS += -DENABLE_SPECTRUM_SHADE=1
+else
+	CFLAGS += -DENABLE_SPECTRUM_SHADE=0
 endif
 ifeq ($(ENABLE_SPECTRUM_RSSI_SQRT),1)
 	CFLAGS += -DENABLE_RSSI_SQRT=1
