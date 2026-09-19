@@ -5,6 +5,13 @@
 **Status:** All critical and high-priority issues resolved, codebase fully audited and reorganized.
 
 #### Key Updates:
+- **FLASH Size Overflow Fix (September 2026):**
+  - The default build no longer fit: the image was 62,104 B against the UV-K5 flasher limit of 61,439 B (0xEFFF), 665 B over
+  - `ENABLE_SMALL_BOLD` and `ENABLE_AUDIO_BAR` now default to `0` (measured savings of 596 B and 560 B)
+  - Small text now renders with `gFontSmall` instead of `gFontSmallBold`; both fonts use identical 6-byte glyph cells, so character width, height and spacing are unchanged
+  - The TX microphone level bar is dropped; the `MicBar` menu entry remains visible and displays `N/A` (same convention already used for disabled options)
+  - Verified clean build: FLASH 60,892 B (92.91%), RAM 3,352 B — 491 B under the flasher limit, no size warning
+  - Per-toggle FLASH costs and the exhausted compiler/linker flag experiments are documented in the Makefile
 - **Airband Modulation Enforcement Hotfix (May 2026):**
   - Airband range `108.000-136.999 MHz` is now always clamped to `AM`
   - Mode changes from menu/shortcut no longer allow `FM`/`USB` to persist on airband

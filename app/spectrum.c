@@ -43,6 +43,9 @@
 #ifndef ENABLE_SPECTRUM_SMOOTHING
 #define ENABLE_SPECTRUM_SMOOTHING 0 // 3-bin curve smoothing (~300 B FLASH)
 #endif
+#ifndef ENABLE_SPECTRUM_SHADE
+#define ENABLE_SPECTRUM_SHADE 1 // Checkerboard body shade under the trace
+#endif
 #ifndef ENABLE_RSSI_SQRT
 #define ENABLE_RSSI_SQRT 0 // Square-root RSSI compression (~300 B FLASH)
 #endif
@@ -186,9 +189,14 @@ static AutoSensitivityProfile autoSensitivity = AUTO_SENS_NORMAL;
 
 // Hysteresis and debounce for listen state.
 // 1 RSSI unit ~= 0.5 dB.
+// P0/P1 latency tune: settle 1000 -> 100 ticks on RX open (AF DAC + amp only
+// need ~ms to settle), listen re-arm 500 -> 200 ticks, release 4 -> 3 lows.
+// Worst-case RX-close tail drops from ~2 s to ~600 ms.
 #define LISTEN_OPEN_HYST_RSSI    4   // +2 dB above trigger to open
 #define LISTEN_CLOSE_HYST_RSSI   4   // -2 dB below trigger to keep listening
-#define LISTEN_RELEASE_LOW_COUNT 4   // consecutive low reads before release
+#define LISTEN_RELEASE_LOW_COUNT 3   // consecutive low reads before release
+#define LISTEN_SETTLE_TICKS      100 // RX-open settle window (~100 ms)
+#define LISTEN_REARM_TICKS       200 // re-arm window while signal present
 #define LISTEN_DROP_EXIT_RSSI   20   // 10 dB abrupt drop => leave RX
 static uint8_t listenLowCount = 0;
 static uint16_t listenPrevRssi = RSSI_MAX_VALUE;
@@ -519,12 +527,20 @@ static void ToggleAudio(bool on)
 
 // Full re-assert of the RX audio route.  Cheap enough to run on every listen
 // window: it is a single SPI burst at the same cadence as the RSSI measurement
-// that already happens there (~3 Hz, far below the audible range).
+// that already happens there (~5 Hz, far below the audible range).
+// P3: tracks the programmed modulation so repeated RX opens on the same mode
+// skip RADIO_SetModulation() (SetAF + REG_3D + AFC + AGC, ~7 SPI ops) and
+// only re-assert the mute-sensitive AF DAC / gain / audio path.
+static uint8_t listenAudioMod = 0xFF; // last modulation programmed by EnableListenAudio
 static void EnableListenAudio(void)
 {
     // Correct AF selection for settings.modulationType, plus the REG_3D
     // band-pass, the REG_48 AF DAC gain and the AFC setting.
-    RADIO_SetModulation(settings.modulationType);
+    if (listenAudioMod != settings.modulationType)
+    {
+        RADIO_SetModulation(settings.modulationType);
+        listenAudioMod = settings.modulationType;
+    }
 
     // RADIO_SetModulation() switches to the AM AGC profile when the modulation
     // is AM.  Spectrum always sweeps with the non-AM profile so RSSI and
@@ -600,15 +616,22 @@ static void SetFScan(uint32_t f)
 
 // Spectrum related
 
-static bool IsPeakOverOpenLevel()
+static bool IsRssiOverOpenLevel(uint16_t rssi)
 {
+    if (settings.rssiTriggerLevel == RSSI_MAX_VALUE)
+        return false;
     uint16_t openLevel = settings.rssiTriggerLevel;
     if (openLevel <= (uint16_t)(RSSI_MAX_VALUE - LISTEN_OPEN_HYST_RSSI))
         openLevel += LISTEN_OPEN_HYST_RSSI;
     else
         openLevel = RSSI_MAX_VALUE;
 
-    return peak.rssi >= openLevel;
+    return rssi >= openLevel;
+}
+
+static bool IsPeakOverOpenLevel()
+{
+    return IsRssiOverOpenLevel(peak.rssi);
 }
 
 static bool IsListeningSignalPresent(uint16_t rssi)
@@ -738,11 +761,11 @@ uint16_t GetRssi()
 
 static void ToggleRX(bool on)
 {
-    #ifdef ENABLE_FEAT_F4HWN_SPECTRUM
+    // P3: repeated triggers on the same state (e.g. peak still over level at
+    // the next sweep end) must not replay the full AF/DAC/gain SPI burst.
     if (isListening == on) {
         return;
     }
-    #endif
     isListening = on;
 
     //RADIO_SetupAGC(settings.modulationType == MODULATION_AM, lockAGC);
@@ -771,7 +794,7 @@ static void ToggleRX(bool on)
         listenT = 25;
         setTailFoundInterrupt();
     #else
-        listenT = 1000;
+        listenT = LISTEN_SETTLE_TICKS;
     #endif
     }
     else
@@ -1047,7 +1070,11 @@ static void RequestAutoTriggerRecalibration()
 static void RearmRuntimeState()
 {
     settings.dbMin = -128;
-    settings.dbMax = -97;
+    // Widen the initial dB window so the noise floor on a quiet band
+    // appears near the bottom instead of spanning the full display.
+    // After the first sweep completes, FinalizeCompletedSweep() auto-scales
+    // dbMax to the measured peak, narrowing the window to the relevant range.
+    settings.dbMax = -50;
     memset(rssiHistory, 0, sizeof(rssiHistory));
 #if ENABLE_PEAK_HOLD
     memset(peakHoldY,   PEAK_HOLD_INIT, sizeof(peakHoldY));
@@ -1277,6 +1304,7 @@ static void ToggleModulation()
         settings.modulationType = MODULATION_FM;
     }
     RADIO_SetModulation(settings.modulationType);
+    listenAudioMod = settings.modulationType;
 
     // Re-arm runtime spectrum state for the new demodulation profile.
     // USB and FM can have very different RSSI/noise floors, so keeping the
@@ -1323,15 +1351,17 @@ static void ToggleBacklight()
 
 static void ToggleStepsCount()
 {
-    if (settings.stepsCount == STEPS_128)
+    // StepsCount enum: STEPS_128=0, STEPS_64=1, STEPS_32=2, STEPS_16=3;
+    // GetStepsCount() = 128 >> stepsCount, so incrementing halves the count.
+    // Cycle 128 -> 64 -> 32 -> 16 -> 128.
+    if (settings.stepsCount >= STEPS_16)
     {
-        settings.stepsCount = STEPS_16;
+        settings.stepsCount = STEPS_128;
     }
-    else if (settings.stepsCount > STEPS_16)
+    else
     {
-        settings.stepsCount--;
+        settings.stepsCount++;
     }
-    // else: already at minimum (STEPS_16), do nothing
 
     uint16_t bw = GetBW();
     // Guard against division-by-zero / degenerate step behavior
@@ -1573,10 +1603,10 @@ Start:
         goto Back;
 }
 
-// Draw the spectrum curve (solid crest + checkerboard body) and, when peak
-// hold is enabled, the dotted peak hold trace.  Both use the same half-step
-// bridging so the peak hold crest shape mirrors the live crest exactly, just
-// rendered with a dotted pattern.
+// Draw the spectrum curve (solid crest + optional checkerboard body) and, when
+// peak hold is enabled, the dotted peak hold trace.  Both use the same
+// half-step bridging so the peak hold crest shape mirrors the live crest
+// exactly, just rendered with a dotted pattern.
 static void DrawSpectrumCurve(const uint8_t *topY)
 {
 #if ENABLE_PEAK_HOLD
@@ -1622,10 +1652,12 @@ static void DrawSpectrumCurve(const uint8_t *topY)
             for (uint8_t y = crestTop; y <= crestBot; y++)
                 PutPixel(x, y, true);
 
+#if ENABLE_SPECTRUM_SHADE
             // Checkerboard body below the crest.
             for (uint8_t y = crestBot + 1; y <= DrawingEndY; y++)
                 if (((x + y) & 1) == 0)
                     PutPixel(x, y, true);
+#endif // ENABLE_SPECTRUM_SHADE
         }
 
 #if ENABLE_PEAK_HOLD
@@ -2488,6 +2520,25 @@ static void UpdateScan()
 {
     Scan();
 
+    // P2: early open mid-sweep.  Previously RX could only open at the sweep
+    // end, so a strong carrier at step 5 of 64 still waited out the rest of
+    // the sweep (~45 ms, more at 128 steps / narrow step).  Test the sweep
+    // max so far with the same threshold the end-of-sweep logic uses: same
+    // false-open rate, just up to one full sweep earlier.
+    // AutoTriggerLevel() is deliberately NOT run here (noise floor needs the
+    // full-sweep min); it still runs at sweep end via UpdatePeakInfoForce().
+    if (!isListening && scanInfo.rssiMax != 0 &&
+        IsRssiOverOpenLevel(scanInfo.rssiMax))
+    {
+        peak.t    = 0;
+        peak.rssi = scanInfo.rssiMax;
+        peak.f    = scanInfo.fPeak;
+        peak.i    = scanInfo.iPeak;
+        ToggleRX(true);
+        TuneToPeak();
+        return;
+    }
+
 #if SPECTRUM_INTERLACE_LARGE_SWEEPS
     if (UseInterlacedSweep())
     {
@@ -2679,9 +2730,8 @@ static void UpdateListening()
 
     if (keepListening)
     {
-        // Extended listen time for better audio perception
-        // Original: 320ms. Increased to allow user to hear more of the transmission
-        listenT = 500;
+        // P1: re-arm window while the signal is present.
+        listenT = LISTEN_REARM_TICKS;
         return;
     }
 
@@ -2831,8 +2881,9 @@ void APP_RunSpectrum()
     // Reset dynamic spectrum state on every entry.
     // Persisted settings are step/count/listenBW only; trigger and dB window
     // are runtime values and should not carry over between sessions.
-    // manualSetFlag = false;
-    // settings.rssiTriggerLevel = RSSI_MAX_VALUE;
+    manualSetFlag = false;
+    settings.rssiTriggerLevel = RSSI_MAX_VALUE;
+    autoNoiseFloor = RSSI_MAX_VALUE;
 
     RearmRuntimeState();
 

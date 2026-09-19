@@ -1,4 +1,3 @@
-
 # compile options (see README.md for descriptions)
 # 0 = disable
 # 1 = enable
@@ -19,9 +18,11 @@ ENABLE_FLASHLIGHT               ?= 1
 # ---- CUSTOM MODS ----
 ENABLE_SPECTRUM                 ?= 1
 ENABLE_BIG_FREQ                 ?= 1
+# OFF saves 596 B FLASH: small text renders non-bold (same font metrics/spacing)
 ENABLE_SMALL_BOLD               ?= 1
 ENABLE_CUSTOM_MENU_LAYOUT       ?= 1
-ENABLE_KEEP_MEM_NAME            ?= 1  # no-op: name preservation on ChSave is now built into settings.c (always on)
+# OFF: every ChSave resets the channel name (stock); ON preserves the name on re-save
+ENABLE_KEEP_MEM_NAME            ?= 1
 ENABLE_WIDE_RX                  ?= 0
 ENABLE_TX_WHEN_AM               ?= 0
 ENABLE_F_CAL_MENU               ?= 0
@@ -34,21 +35,61 @@ ENABLE_AM_FIX                   ?= 0
 ENABLE_SQUELCH_MORE_SENSITIVE   ?= 0
 ENABLE_FASTER_CHANNEL_SCAN      ?= 0
 ENABLE_RSSI_BAR                 ?= 1
+# OFF saves 560 B FLASH: TX mic level bar dropped; "MicBar" menu shows N/A (same pattern as VOX when ENABLE_VOX=0)
 ENABLE_AUDIO_BAR                ?= 1
 ENABLE_COPY_CHAN_TO_VFO         ?= 0
 ENABLE_REDUCE_LOW_MID_TX_POWER  ?= 0
 ENABLE_BYP_RAW_DEMODULATORS     ?= 0
 ENABLE_BLMIN_TMP_OFF            ?= 0
 ENABLE_SCAN_RANGES              ?= 0
-ENABLE_WATERFALL                ?= 0       # Waterfall display (saves FLASH when disabled; only wanted with spectrum)
+# Waterfall display (saves FLASH when disabled; only wanted with spectrum)
+ENABLE_WATERFALL                ?= 0
 # Spectrum optimization toggles (disabled by default to reduce FLASH usage)
-ENABLE_SPECTRUM_PEAK_HOLD       ?= 0       # Peak hold trace (saves ~500 bytes when disabled)
-ENABLE_SPECTRUM_SMOOTH          ?= 0       # Curve smoothing (saves ~300 bytes when disabled)
-ENABLE_SPECTRUM_INTERLACE       ?= 0       # Interlaced sweeps for >128-step scan ranges
-ENABLE_SPECTRUM_BLACKLIST       ?= 0       # KEY_SIDE1 blacklist of noisy frequencies
-ENABLE_SPECTRUM_RSSI_SQRT       ?= 0       # Square-root RSSI compression (saves ~300 bytes when disabled)
-ENABLE_SPECTRUM_REG_MENU        ?= 0       # STILL-mode LNA/LNA/VGA register menu (saves ~700 bytes when disabled)
-ENABLE_SPECTRUM_BIDIR           ?= 0       # Bidirectional sweep (alternating start side; saves ~400 bytes when disabled)
+# Peak hold trace (saves ~500 bytes when disabled)
+ENABLE_SPECTRUM_PEAK_HOLD       ?= 0
+# Curve smoothing (saves ~300 bytes when disabled)
+ENABLE_SPECTRUM_SMOOTH          ?= 0
+# Checkerboard body shade under the spectrum trace (saves FLASH when disabled)
+ENABLE_SPECTRUM_SHADE           ?= 1
+# Interlaced sweeps for >128-step scan ranges
+ENABLE_SPECTRUM_INTERLACE       ?= 0
+# KEY_SIDE1 blacklist of noisy frequencies
+ENABLE_SPECTRUM_BLACKLIST       ?= 0
+# Square-root RSSI compression (saves ~300 bytes when disabled)
+ENABLE_SPECTRUM_RSSI_SQRT       ?= 0
+# STILL-mode LNA/LNA/VGA register menu (saves ~700 bytes when disabled)
+ENABLE_SPECTRUM_REG_MENU        ?= 0
+# Bidirectional sweep (alternating start side; saves ~400 bytes when disabled)
+ENABLE_SPECTRUM_BIDIR           ?= 0
+
+#############################################################
+# ---- FLASH BUDGET ----
+# UV-K5 flasher limit is 61439 B (0xEFFF); the bootloader owns 0xF000+.
+# Measured clean-build FLASH saved when a toggle is set to 0, with the rest of the
+# default config unchanged (-Oz + single-partition LTO + --gc-sections).
+# Costs are additive to within a few bytes:
+#   ENABLE_RSSI_BAR   -580                ENABLE_AUDIO_BAR  -560
+#   ENABLE_BIG_FREQ    -92                ENABLE_FLASHLIGHT  -80
+#   ENABLE_SMALL_BOLD  ~60 (nearly free now: the dedicated 564 B bold font table was
+#                           removed and bold is synthesised from gFontSmall in ui/helper.c)
+#   ENABLE_SPECTRUM_SHADE -36 (checkerboard body under the trace)
+#   ENABLE_CUSTOM_MENU_LAYOUT: ON is 88 B SMALLER
+# Size-tuned flags already in use: -Oz, -ffunction-sections/-fdata-sections +
+# --gc-sections, single-partition LTO, -fmerge-all-constants, -fno-ipa-cp-clone,
+# -fno-ipa-sra, -fno-inline-small-functions.
+# -Wl,-O2, -falign-functions/jumps/loops/labels=1 and -fno-unwind-tables all measured
+# exactly 0 B, and -fno-ipa-cp / -fno-jump-tables made the image LARGER.
+#
+# Default configuration (SMALL_BOLD + AUDIO_BAR + RSSI_BAR all ON):
+#   FLASH 61388 B of the 61439 B limit  ->  +51 B margin
+# (measured with the local arm-none-eabi 14.3 toolchain).  Turn a toggle off only if a
+# new feature needs the headroom.
+#
+# !! DO NOT put an inline "# comment" after a value with whitespace before the '#' !!
+# GNU make keeps that whitespace in the value, so `ENABLE_X ?= 1   # note` makes the
+# value "1   ", which is NOT equal to 1 and makes the `ifeq ($(ENABLE_X),1)` block below
+# silently skip its -DENABLE_X.  The flag then looks "enabled" while the code stays
+# compiled out.  Put comments on their own line above the assignment.
 
 # ---- CONTRIB MODS ----
 
@@ -91,7 +132,7 @@ ENABLE_SWD                      ?= 0
 ENABLE_OVERLAY                  ?= 0
 ENABLE_LTO                      ?= 1
 ENABLE_EXPERIMENTAL_CFLAGS      ?= 1
-ENABLE_EXTRA_UART_CMD           ?= 0   # CHIRP needs 0x052F (session init) -- default ON
+ENABLE_EXTRA_UART_CMD           ?= 0
 # H2 watchdog (driver/system.c WWDT driver). Default OFF: the DP32G030 WWDT register
 # map is NOT documented in the BSP/hardware .def files; the base address in
 # driver/system.h must be validated on real hardware (OpenOCD `mdw 0x40002000`)
@@ -307,6 +348,10 @@ ifeq ($(ENABLE_CLANG),0)
 	CFLAGS += -Oz -Wall -Werror -mcpu=cortex-m0 -fshort-enums -fno-delete-null-pointer-checks -std=c2x -MMD
 	# Size tuning (saves ~184B FLASH): no constant-prop/sra clones, merge identical consts
 	CFLAGS += -fmerge-all-constants -fno-ipa-cp-clone -fno-ipa-sra
+	# -Oz still inlines "small" functions; switching that off saves ~204 B FLASH
+	# (measured) at the cost of a few extra calls.  Needed to keep the default
+	# configuration -- SMALL_BOLD + AUDIO_BAR + RSSI_BAR all ON -- under 61439 B.
+	CFLAGS += -fno-inline-small-functions
 	#CFLAGS += -Os -Wall -Werror -mcpu=cortex-m0 -fno-builtin -fshort-enums -fno-delete-null-pointer-checks -std=c2x -MMD
 	#CFLAGS += -Os -Wall -Werror -mcpu=cortex-m0 -fno-builtin -fshort-enums -fno-delete-null-pointer-checks -std=c11 -MMD
 	#CFLAGS += -Os -Wall -Werror -mcpu=cortex-m0 -fno-builtin -fshort-enums -fno-delete-null-pointer-checks -std=c99 -MMD
@@ -373,6 +418,11 @@ ifeq ($(ENABLE_SPECTRUM_SMOOTH),1)
 	CFLAGS += -DENABLE_SPECTRUM_SMOOTHING=1
 else
 	CFLAGS += -DENABLE_SPECTRUM_SMOOTHING=0
+endif
+ifeq ($(ENABLE_SPECTRUM_SHADE),1)
+	CFLAGS += -DENABLE_SPECTRUM_SHADE=1
+else
+	CFLAGS += -DENABLE_SPECTRUM_SHADE=0
 endif
 ifeq ($(ENABLE_SPECTRUM_RSSI_SQRT),1)
 	CFLAGS += -DENABLE_RSSI_SQRT=1

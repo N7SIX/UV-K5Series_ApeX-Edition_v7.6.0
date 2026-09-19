@@ -167,17 +167,56 @@ void UI_PrintStringSmallNormalInverse(const char *pString, uint8_t Start, uint8_
 }
 
 
+#ifdef ENABLE_SMALL_BOLD
+// Stamp the normal small-font glyphs with a one-pixel horizontal smear
+// (every column OR-ed with the column on its left).  This yields a bold
+// appearance using the existing gFontSmall table, with exactly the same
+// metrics/character spacing as before, so no layout changes are needed and
+// the old 564-byte dedicated bold font table is no longer required.
+static void UI_PrintStringSmallBoldBuffer(const char *pString, uint8_t *buffer, uint32_t char_width)
+{
+    const size_t       Length       = strlen(pString);
+    const unsigned int char_spacing = char_width + 1;
+
+    for (size_t i = 0; i < Length; i++)
+    {
+        const char c = pString[i];
+        if (c > ' ' && c < 127)
+        {
+            const unsigned int index = c - ' ' - 1;
+            uint8_t       *dst  = buffer + i * char_spacing + 1;
+            const uint8_t *src  = gFontSmall[index];
+            uint8_t        prev = 0;
+
+            for (uint32_t k = 0; k < char_width; k++)
+            {
+                const uint8_t cur = src[k];
+                dst[k] = cur | prev;    // bold = glyph OR (glyph shifted right 1 px)
+                prev   = cur;
+            }
+        }
+    }
+}
+#endif
+// ENABLE_SMALL_BOLD is now rendered by synthesising bold from gFontSmall
+// (see ui/helper.c :: UI_PrintStringSmallBold) instead of a dedicated bold
+// font table.  The old 564-byte gFontSmallBold[] table was removed to recover
+// FLASH; the synthesised glyphs have identical metrics and spacing.
 void UI_PrintStringSmallBold(const char *pString, uint8_t Start, uint8_t End, uint8_t Line)
 {
-#ifdef ENABLE_SMALL_BOLD
-    const uint8_t *font = (uint8_t *)gFontSmallBold;
-    const uint8_t char_width = ARRAY_SIZE(gFontSmallBold[0]);
+#ifndef ENABLE_SMALL_BOLD
+    // Small text renders non-bold
+    UI_PrintStringSmallNormal(pString, Start, End, Line);
 #else
-    const uint8_t *font = (uint8_t *)gFontSmall;
-    const uint8_t char_width = ARRAY_SIZE(gFontSmall[0]);
-#endif
+    const unsigned int char_width   = ARRAY_SIZE(gFontSmall[0]);
+    const unsigned int char_spacing = char_width + 1;
+    const size_t       Length       = strlen(pString);
 
-    UI_PrintStringSmall(pString, Start, End, Line, char_width, font);
+    if (End > Start)
+        Start += (((End - Start) - Length * char_spacing) + 1) / 2;
+
+    UI_PrintStringSmallBoldBuffer(pString, gFrameBuffer[Line] + Start, char_width);
+#endif
 }
 
 void UI_PrintStringSmallBufferNormal(const char *pString, uint8_t * buffer)

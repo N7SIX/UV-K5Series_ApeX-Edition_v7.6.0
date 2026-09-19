@@ -892,6 +892,7 @@ void SETTINGS_SaveChannel(uint8_t Channel, uint8_t VFO, const VFO_Info_t *pVFO, 
         SETTINGS_UpdateChannel(Channel, pVFO, true, true, true);
 
         if (IS_MR_CHANNEL(Channel)) {
+#ifdef ENABLE_KEEP_MEM_NAME
             if (Mode >= 3) {
                 // explicit save (e.g. channel copy): store the VFO's own name
                 SETTINGS_SaveChannelName(Channel, pVFO->Name);
@@ -915,6 +916,11 @@ void SETTINGS_SaveChannel(uint8_t Channel, uint8_t VFO, const VFO_Info_t *pVFO, 
                     SETTINGS_SaveChannelName(Channel, "");
             }
             // Mode 1 (single setting save) never touches the channel name
+#else
+            // stock behaviour: clearing the name on every memory save
+            // (ENABLE_KEEP_MEM_NAME=0)
+            SETTINGS_SaveChannelName(Channel, "");
+#endif
         }
     }
 
