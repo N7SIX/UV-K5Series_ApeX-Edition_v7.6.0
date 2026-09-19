@@ -18,10 +18,8 @@ ENABLE_FLASHLIGHT               ?= 1
 # ---- CUSTOM MODS ----
 ENABLE_SPECTRUM                 ?= 1
 ENABLE_BIG_FREQ                 ?= 1
-# OFF saves 596 B FLASH: small text renders non-bold (same font metrics/spacing)
 ENABLE_SMALL_BOLD               ?= 1
 ENABLE_CUSTOM_MENU_LAYOUT       ?= 1
-# OFF: every ChSave resets the channel name (stock); ON preserves the name on re-save
 ENABLE_KEEP_MEM_NAME            ?= 1
 ENABLE_WIDE_RX                  ?= 0
 ENABLE_TX_WHEN_AM               ?= 0
@@ -35,7 +33,6 @@ ENABLE_AM_FIX                   ?= 0
 ENABLE_SQUELCH_MORE_SENSITIVE   ?= 0
 ENABLE_FASTER_CHANNEL_SCAN      ?= 0
 ENABLE_RSSI_BAR                 ?= 1
-# OFF saves 560 B FLASH: TX mic level bar dropped; "MicBar" menu shows N/A (same pattern as VOX when ENABLE_VOX=0)
 ENABLE_AUDIO_BAR                ?= 1
 ENABLE_COPY_CHAN_TO_VFO         ?= 0
 ENABLE_REDUCE_LOW_MID_TX_POWER  ?= 0
@@ -48,19 +45,6 @@ ENABLE_WATERFALL                ?= 0
 # Peak hold trace (saves ~500 bytes when disabled)
 ENABLE_SPECTRUM_PEAK_HOLD       ?= 0
 # Curve smoothing (saves ~300 bytes when disabled)
-ENABLE_SPECTRUM_SMOOTH          ?= 0
-# Checkerboard body shade under the spectrum trace (saves FLASH when disabled)
-ENABLE_SPECTRUM_SHADE           ?= 1
-# Interlaced sweeps for >128-step scan ranges
-ENABLE_SPECTRUM_INTERLACE       ?= 0
-# KEY_SIDE1 blacklist of noisy frequencies
-ENABLE_SPECTRUM_BLACKLIST       ?= 0
-# Square-root RSSI compression (saves ~300 bytes when disabled)
-ENABLE_SPECTRUM_RSSI_SQRT       ?= 0
-# STILL-mode LNA/LNA/VGA register menu (saves ~700 bytes when disabled)
-ENABLE_SPECTRUM_REG_MENU        ?= 0
-# Bidirectional sweep (alternating start side; saves ~400 bytes when disabled)
-ENABLE_SPECTRUM_BIDIR           ?= 0
 
 #############################################################
 # ---- FLASH BUDGET ----
@@ -72,7 +56,6 @@ ENABLE_SPECTRUM_BIDIR           ?= 0
 #   ENABLE_BIG_FREQ    -92                ENABLE_FLASHLIGHT  -80
 #   ENABLE_SMALL_BOLD  ~60 (nearly free now: the dedicated 564 B bold font table was
 #                           removed and bold is synthesised from gFontSmall in ui/helper.c)
-#   ENABLE_SPECTRUM_SHADE -36 (checkerboard body under the trace)
 #   ENABLE_CUSTOM_MENU_LAYOUT: ON is 88 B SMALLER
 # Size-tuned flags already in use: -Oz, -ffunction-sections/-fdata-sections +
 # --gc-sections, single-partition LTO, -fmerge-all-constants, -fno-ipa-cp-clone,
@@ -418,11 +401,6 @@ ifeq ($(ENABLE_SPECTRUM_SMOOTH),1)
 	CFLAGS += -DENABLE_SPECTRUM_SMOOTHING=1
 else
 	CFLAGS += -DENABLE_SPECTRUM_SMOOTHING=0
-endif
-ifeq ($(ENABLE_SPECTRUM_SHADE),1)
-	CFLAGS += -DENABLE_SPECTRUM_SHADE=1
-else
-	CFLAGS += -DENABLE_SPECTRUM_SHADE=0
 endif
 ifeq ($(ENABLE_SPECTRUM_RSSI_SQRT),1)
 	CFLAGS += -DENABLE_RSSI_SQRT=1
