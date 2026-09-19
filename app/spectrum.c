@@ -528,24 +528,19 @@ static void ToggleAudio(bool on)
 // Full re-assert of the RX audio route.  Cheap enough to run on every listen
 // window: it is a single SPI burst at the same cadence as the RSSI measurement
 // that already happens there (~5 Hz, far below the audible range).
-// P3: tracks the programmed modulation so repeated RX opens on the same mode
-// skip RADIO_SetModulation() (SetAF + REG_3D + AFC + AGC, ~7 SPI ops) and
-// only re-assert the mute-sensitive AF DAC / gain / audio path.
-static uint8_t listenAudioMod = 0xFF; // last modulation programmed by EnableListenAudio
+// NOTE: RADIO_SetModulation() must run on EVERY call.  DisableListenAudio()
+// latches REG_47 <11:8> to BK4819_AF_MUTE on every sweep phase, so the AF
+// demodulator selection can never be cached between listen windows -- skipping
+// it here leaves the receiver permanently silent (and the EnsureListenAudio()
+// repair path dead, since it funnels back into this function).
 static void EnableListenAudio(void)
 {
     // Correct AF selection for settings.modulationType, plus the REG_3D
     // band-pass, the REG_48 AF DAC gain and the AFC setting.
-    if (listenAudioMod != settings.modulationType)
-    {
-        RADIO_SetModulation(settings.modulationType);
-        listenAudioMod = settings.modulationType;
-    }
-
-    // RADIO_SetModulation() switches to the AM AGC profile when the modulation
-    // is AM.  Spectrum always sweeps with the non-AM profile so RSSI and
-    // squelch-trigger calibration stay comparable across bands, so put it back.
-    RADIO_SetupAGC(false, lockAGC);
+    // NOTE: no RADIO_SetupAGC() here - ToggleRX(true) has already armed the
+    // non-AM AGC profile, and the beep-repair path (EnsureListenAudio) runs
+    // while that profile is still valid (beeps never touch REG_7E).
+    RADIO_SetModulation(settings.modulationType);
 
     ToggleAFDAC(true);   // REG_30 bit 9: AF DAC
     ApplyRxAudioGain();  // REG_48: AF gain / DAC gain
@@ -730,7 +725,20 @@ static void TuneToPeak()
     scanInfo.f = peak.f;
     scanInfo.rssi = peak.rssi;
     scanInfo.i = peak.i;
-    SetF(scanInfo.f);
+    // Scan context (audio not open yet): cached-register path is enough;
+    // EnableListenAudio() re-arms the AF DAC after the final tune.
+    SetFScan(scanInfo.f);
+}
+
+// Shared "stop and listen on the strongest bin" sequence for both sweep-end
+// sites (normal + interlaced).  Tunes to the true carrier, then opens RX.
+static void FineTuneToPeak(void);
+static void ToggleRX(bool on);
+static void OpenOnPeak()
+{
+    TuneToPeak();
+    FineTuneToPeak();
+    ToggleRX(true);
 }
 
 static void DeInitSpectrum()
@@ -759,13 +767,49 @@ uint16_t GetRssi()
     return rssi;
 }
 
+// Land on the actual carrier instead of the peak bin centre.  Bins are spaced
+// by the scan step (e.g. 25 kHz) and the grid starts at currentFreq - BW/2,
+// so a signal can sit up to +/- half a step away from the tuned frequency;
+// FM demod of an off-centre carrier sounds distorted / hollow ("off station")
+// even though the displayed frequency is the correct bin.  Sample the RSSI of
+// both neighbours of the peak bin and settle on the strongest - the true
+// carrier position.
+static void __attribute__((noinline)) FineTuneToPeak()
+{
+    const uint16_t step = GetScanStep();   // 0.01 kHz units
+    uint16_t best = peak.rssi;
+    uint32_t f = peak.f, f2;
+    uint16_t r;
+
+    f2 = peak.f - step;
+    SetFScan(f2);
+    r = GetRssi();
+    if (r > best) { best = r; f = f2; }
+
+    f2 = peak.f + step;
+    SetFScan(f2);
+    r = GetRssi();
+    if (r > best) { best = r; f = f2; }
+
+    if (best != peak.rssi)     // 16-bit test: best only moves when a probe won
+    {
+        peak.f = f;        // keep display/trigger on the true carrier
+        peak.rssi = best;
+    }
+    // PLL is already on the chosen frequency: TuneToPeak()'s SetFScan parked
+    // it on the centre and the probes parked it on the winner.  The audio
+    // path is opened afterwards by ToggleRX(true) -> EnableListenAudio(),
+    // which re-arms the AF DAC regardless of what the scans did to REG_30.
+}
+
+
 static void ToggleRX(bool on)
 {
-    // P3: repeated triggers on the same state (e.g. peak still over level at
-    // the next sweep end) must not replay the full AF/DAC/gain SPI burst.
+    #ifdef ENABLE_FEAT_F4HWN_SPECTRUM
     if (isListening == on) {
         return;
     }
+    #endif
     isListening = on;
 
     //RADIO_SetupAGC(settings.modulationType == MODULATION_AM, lockAGC);
@@ -1173,6 +1217,15 @@ static void UpdateAutoSensitivity(bool inc)
 
 static void UpdateRssiTriggerLevel(bool inc)
 {
+    // Seed from the window bottom if AUTO has not calibrated yet: applying
+    // +/-2 directly to the RSSI_MAX_VALUE sentinel (65535) wraps around
+    // uint16_t (+2 -> 1, clamps to window bottom; -2 -> 65533, slams dbMax
+    // to max) and the first key press would jump the line to an extreme
+    // instead of moving it sensibly.  Bottom edge keeps the line visible and
+    // adjustable from the very first press.
+    if (settings.rssiTriggerLevel == RSSI_MAX_VALUE)
+        settings.rssiTriggerLevel = dbm2rssi(settings.dbMin);
+
     if (inc)
         settings.rssiTriggerLevel += 2;
     else
@@ -1304,7 +1357,6 @@ static void ToggleModulation()
         settings.modulationType = MODULATION_FM;
     }
     RADIO_SetModulation(settings.modulationType);
-    listenAudioMod = settings.modulationType;
 
     // Re-arm runtime spectrum state for the new demodulation profile.
     // USB and FM can have very different RSSI/noise floors, so keeping the
@@ -2117,6 +2169,7 @@ static void OnKeyDown(uint8_t key) {
     case KEY_PTT:
         SetState(STILL);
         TuneToPeak();
+        FineTuneToPeak();
         break;
     case KEY_MENU:
         // Short press toggles manual/auto.
@@ -2556,8 +2609,7 @@ static void UpdateScan()
         UpdatePeakInfo();
         if (IsPeakOverOpenLevel())
         {
-            ToggleRX(true);
-            TuneToPeak();
+            OpenOnPeak();
             return;
         }
 
@@ -2589,8 +2641,7 @@ static void UpdateScan()
     UpdatePeakInfo();
     if (IsPeakOverOpenLevel())
     {
-        ToggleRX(true);
-        TuneToPeak();
+        OpenOnPeak();
         return;
     }
 
