@@ -68,12 +68,17 @@ clean() {
 
 # ------------------ BUILD VARIANTS ------------------
 ApeX() {
+    # Resolve the git short hash on the HOST: .dockerignore keeps .git out of
+    # the build context, so make inside the container cannot read it itself.
+    BUILD_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo N/A)"
     prepare_build
     echo "🦾 Compiling ApeX..."
+    echo "   Build commit: ${BUILD_COMMIT}"
     docker run -v "$DOCKER_BUILD_PATH:/app/build" "$IMAGE_NAME" bash -c "\
         cd /app && make -s \
         EDITION_STRING=ApeX \
-        TARGET=ApeX"
+        TARGET=ApeX \
+        BUILD_COMMIT=${BUILD_COMMIT}"
 }
 # ------------------ MENU ------------------
 

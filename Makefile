@@ -336,6 +336,17 @@ ifeq ($(ENABLE_FEAT_N7SIX),1)
 	AUTHOR_STRING ?= $(AUTHOR_STRING_1)+$(AUTHOR_STRING_2)
 	VERSION_STRING ?= $(VERSION_STRING_2)
 
+	# Resolve the short git commit hash shown on the SysInf BUILD page.
+	# Can be overridden on the command line (CI passes it explicitly, because
+	# .dockerignore keeps .git out of the build context). Falls back to "N/A"
+	# when git or the .git metadata is unavailable.
+	ifneq (, $(shell $(WHERE) git))
+	BUILD_COMMIT ?= $(shell git rev-parse --short HEAD 2>$(NULL_OUTPUT))
+	endif
+	ifeq ($(strip $(BUILD_COMMIT)),)
+	BUILD_COMMIT := N/A
+	endif
+
 	SQL_TONE ?= 550 # For SA818, use 600 and python3 sa818.py --port /dev/ttyS2 radio --frequency 434.975 --ctcss 71.9 --tail Open
 else
 	AUTHOR_STRING ?= EGZUMER
@@ -604,6 +615,7 @@ ifeq ($(ENABLE_FEAT_N7SIX),1)
 	CFLAGS  += -DAUTHOR_STRING_1=\"$(AUTHOR_STRING_1)\" -DVERSION_STRING_1=\"$(VERSION_STRING_1)\"
 	CFLAGS  += -DAUTHOR_STRING_2=\"$(AUTHOR_STRING_2)\" -DVERSION_STRING_2=\"$(VERSION_STRING_2)\"
 	CFLAGS  += -DEDITION_STRING=\"$(EDITION_STRING)\"
+	CFLAGS  += -DBUILD_COMMIT=\"$(BUILD_COMMIT)\"
 else
 	CFLAGS  += -DSQL_TONE=550
 endif

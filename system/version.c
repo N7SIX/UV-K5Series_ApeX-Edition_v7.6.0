@@ -31,4 +31,7 @@ const char UART_Version[] = "UV-K5 Firmware, " AUTHOR_STRING VER "\r\n";
 
 const char BuildDate[] = __DATE__;
 const char BuildTime[] = __TIME__;
-const char BuildCommit[] = "N/A";
+#ifndef BUILD_COMMIT
+	#define BUILD_COMMIT "N/A"
+#endif
+const char BuildCommit[] = BUILD_COMMIT;

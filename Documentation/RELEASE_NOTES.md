@@ -70,14 +70,20 @@
   - Calibration is accessible via the battery menu and persists in EEPROM.
 - **Waterfall Disabled (Temporary):**
   - The waterfall implementation has been temporarily disabled to reclaim FLASH space.
-  - FLASH is at 99.80% capacity (61,316 B used of 61,440 B limit) — the waterfall rendering contributed to the overflow.
+  - FLASH is at 99.74% capacity (61,280 B used of 61,440 B limit) — the waterfall rendering contributed to the overflow.
   - The waterfall will be re-enabled once ample FLASH space is reclaimed through further optimization.
   - The spectrum analyzer remains fully functional; only the temporal waterfall display layer is disabled.
+
+- **SysInf BUILD Page — Commit ID Now Embedded:**
+  - The `BUILD` page in the `SysInf` menu now shows the short git commit hash of the exact source revision that produced the firmware.
+  - Previously the field was hardcoded to `N/A` in `system/version.c`, so the build identity was never visible on the radio.
+  - `system/version.c` now honours a `BUILD_COMMIT` compile-time define with an `N/A` fallback, and the `Makefile` resolves the hash with `git rev-parse --short HEAD` for N7SIX builds.
+  - The Docker/CI build scripts resolve the hash on the host and pass it explicitly, because `.dockerignore` keeps `.git` out of the build context.
 
 #### Memory Usage:
 ```
 Memory Region      Used Size  Region Size   % Used
-FLASH                61316        61440     99.80%
+FLASH                61280        61440     99.74%
 RAM                   3372         8192     41.16%
 ```
 
