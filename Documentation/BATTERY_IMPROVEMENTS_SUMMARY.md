@@ -360,7 +360,7 @@ The 2-point calibration adds a small memory footprint:
 
 ```
 Memory Region      Used Size  Region Size   % Used
-FLASH                61316        61440     99.80%
+FLASH                61280        61440     99.74%
 RAM                   3372         8192     41.16%
 ```
 

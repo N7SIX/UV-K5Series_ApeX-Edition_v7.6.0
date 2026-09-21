@@ -13,7 +13,7 @@
 	- Curve-fitting approach with low-point and high-point reference calibration
 	- Accessible via battery menu; persists in EEPROM
 - **FLASH Optimization:**
-	- Waterfall display temporarily disabled to reclaim FLASH space (61,316 B / 61,440 B = 99.80%)
+	- Waterfall display temporarily disabled to reclaim FLASH space (61,280 B / 61,440 B = 99.74%)
 	- Spectrum analyzer remains fully functional; only temporal waterfall layer is disabled
 	- Will be re-enabled once ample FLASH space is reclaimed
 - **Previous Release (v7.6.6):**
@@ -28,7 +28,7 @@
 #### Memory Usage:
 ```
 Memory Region      Used Size  Region Size   % Used
-FLASH                61316        61440     99.80%
+FLASH                61280        61440     99.74%
 RAM                   3372         8192     41.16%
 ```
 
