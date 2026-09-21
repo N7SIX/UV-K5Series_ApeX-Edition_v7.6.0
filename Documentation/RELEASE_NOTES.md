@@ -80,6 +80,11 @@
   - `system/version.c` now honours a `BUILD_COMMIT` compile-time define with an `N/A` fallback, and the `Makefile` resolves the hash with `git rev-parse --short HEAD` for N7SIX builds.
   - The Docker/CI build scripts resolve the hash on the host and pass it explicitly, because `.dockerignore` keeps `.git` out of the build context.
 
+- **CI Packaging Fix — Firmware Artifact:**
+  - The `Build Firmware` workflow previously uploaded `compiled-firmware/n7six.packed.bin`, a path the build never creates (the Makefile writes `build/ApeX/n7six.ApeX-k5.<version>.packed.bin`), so every run produced an empty artifact.
+  - The upload step now targets the real output (`build/ApeX/*.packed.bin`) and sets `if-no-files-found: error`, so a missing image fails the job loudly.
+  - The flashable packed image is now downloadable from the workflow run and can be attached to a GitHub Release.
+
 #### Memory Usage:
 ```
 Memory Region      Used Size  Region Size   % Used

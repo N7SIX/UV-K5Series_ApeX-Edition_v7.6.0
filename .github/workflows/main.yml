@@ -21,4 +21,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: firmware-artifact
-        path: compiled-firmware/n7six.packed.bin
+        # compile-with-docker.sh mounts $PWD/build into the container, so the
+        # packed image is written to build/ApeX/ on the runner.
+        path: build/ApeX/*.packed.bin
+        if-no-files-found: error
