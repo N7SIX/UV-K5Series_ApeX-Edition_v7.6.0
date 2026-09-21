@@ -292,6 +292,18 @@ Bayer threshold: rarely exceeded
 
 ---
 
+## ⚠️ Waterfall Disabled in v7.6.10 (Temporary)
+
+The waterfall implementation has been **temporarily disabled** in v7.6.10 to reclaim FLASH space.
+
+- **FLASH usage:** 61,316 B / 61,440 B (99.80%) — at the flasher limit
+- **Reason:** The waterfall rendering contributed to the FLASH overflow; it has been disabled pending further optimization
+- **Impact:** The spectrum analyzer remains fully functional; only the temporal waterfall display layer is disabled
+- **Future:** Will be re-enabled once ample FLASH space is reclaimed
+- **See:** [RELEASE_NOTES.md](RELEASE_NOTES.md) v7.6.10 section for details
+
+---
+
 ## 10. Recommended Adjustments (Optional)
 
 If you want to tweak behavior:

@@ -1,55 +1,87 @@
-# UV-K5/K5(8)/K6 SERIES APEX EDITION — v7.6.6 Release & Audit Summary (April 18, 2026)
+# UV-K5/K5(8)/K6 SERIES APEX EDITION — v7.6.10 Release & Audit Summary
 
-**Firmware Version:** v7.6.6 (ApeX Edition)
-**Release Date:** April 18, 2026
-**Status:** All critical and high-priority issues resolved, codebase fully audited and reorganized.
+**Firmware Version:** v7.6.10 (ApeX Edition)
+**Release Date:** September 21, 2026
+**Status:** v7.6.10 release — UI/UX modernization (UV-K1 Fusion), 2-point battery calibration, and FLASH optimization.
 
 #### Key Updates:
-- **Critical Security Fixes:**
-	- Buffer overflow in UART (strcpy → strncpy, explicit null-termination)
-	- Interrupt state management (save/restore with __get_PRIMASK)
-	- Frequency input overflow protection (bounds checking)
-	- EEPROM bounds and alignment validation
-- **Performance Improvements:**
-	- Blocking EEPROM writes refactored for async operation
-	- Hardware I2C recommended for 30x speedup
-	- Ring buffer and spectrum caching optimizations
-- **Stability & Reliability:**
-	- All features validated in field and lab
-	- Defensive bounds checking for all display buffers
-	- Persistent spectrum state with EEPROM validation
-- **Documentation:**
-	- All analysis, planning, and implementation guides moved to Documentation/
-	- README, QUICK_REFERENCE, and CRITICAL_FIXES_REPORT updated
-	- All .md and .txt files now follow a unified naming and organization convention
+- **UI/UX Modernization:**
+	- Adopted UI/UX from UV-K1's latest Fusion firmware by Armel (F4HWN)
+	- Menu layouts, iconography, and interaction flows updated to match modern UV-K1 standard
+- **Battery System:**
+	- 2-point Battery Calibration implementation for more accurate voltage-to-percentage estimation
+	- Curve-fitting approach with low-point and high-point reference calibration
+	- Accessible via battery menu; persists in EEPROM
+- **FLASH Optimization:**
+	- Waterfall display temporarily disabled to reclaim FLASH space (61,316 B / 61,440 B = 99.80%)
+	- Spectrum analyzer remains fully functional; only temporal waterfall layer is disabled
+	- Will be re-enabled once ample FLASH space is reclaimed
+- **Previous Release (v7.6.6):**
+	- Critical Security Fixes: Buffer overflow in UART, interrupt state management, frequency overflow protection, EEPROM bounds validation
+	- Performance Improvements: Async EEPROM writes, hardware I2C, ring buffer and spectrum caching
+	- Stability & Reliability: Field and lab validation, defensive bounds checking, persistent spectrum state
 
-#### Implementation Priority:
-- All critical and high-impact issues addressed first (see QUICK_REFERENCE.md for matrix)
-- Remaining medium/low-priority items documented for future releases
+#### Getting Started:
+- UVTools: https://n7six.github.io/UVTools/
+- Compile: `./compile-with-docker.sh ApeX` (Docker) or `win_make.bat` (Windows)
 
-#### User Impact:
-- Safer, more robust firmware with professional-grade spectrum analyzer
-- All documentation up to date and organized for developer reference
+#### Memory Usage:
+```
+Memory Region      Used Size  Region Size   % Used
+FLASH                61316        61440     99.80%
+RAM                   3372         8192     41.16%
+```
+
+---
 
 # Documentation Directory
 
-All `.md` and `.txt` documentation files should be stored in this folder.
+All `.md` and `.txt` documentation files are stored in this folder.
 
 ## Current Documentation
+
+### Release Notes & Updates
+- **RELEASE_NOTES.md** - Technical release notes (v7.6.0 through v7.6.10)
+- **v7.6.10_UPDATE_SUMMARY.md** - v7.6.10 update summary (UI/UX, battery calibration, waterfall)
+- **v7.6.6_UPDATE_SUMMARY.md** - v7.6.6 update summary (SysInf, scan-range, airband fixes)
+
+### Security & Fixes
+- **CRITICAL_FIXES_REPORT.md** - Implementation status report for S1-S4 critical fixes
+- **IMPLEMENTATION_COMPLETED.md** - Implementation completed summary with verification checklist
 
 ### Analysis & Planning
 - **QUICK_REFERENCE.md** - One-page summary of performance & stability issues
 - **PERFORMANCE_STABILITY_ANALYSIS.md** - Comprehensive analysis with implementation details
 - **IMPLEMENTATION_GUIDE.md** - Code examples and practical implementation guide
+- **BATTERY_IMPROVEMENTS_SUMMARY.md** - Battery system improvements summary
+- **BATTERY_SYSTEM_ANALYSIS.md** - Battery system technical analysis
+- **BATTERY_TECHNICAL_REFERENCE.md** - Battery calibration technical reference
+- **BATTERY_VISUAL_GUIDE.md** - Battery calibration user guide
+- **BATTERY_COMPLETION_REPORT.md** - Battery calibration completion report
 
-### Original Documentation
-- **CODEBASE_ANALYSIS.md** - Code structure and module dependencies
-- **DEPENDENCY_REFERENCE.md** - File and function dependencies
-- **REORGANIZATION_GUIDE.md** - Code organization improvements
+### Spectrum Analyzer
 - **SPECTRUM_ANALYSIS.md** - Spectrum analyzer design and logic
-- **SPECTRUM_CODE_PATTERNS.md** - Spectrum implementation patterns
-- **WATERFALL_ANALYSIS.md** - Waterfall display implementation
-- **REORGANIZATION_PLAN.txt** - Reorganization planning document
+- **SPECTRUM_ANALYZER_ANALYSIS.md** - Implementation analysis (v7.6.4br3+)
+- **SPECTRUM_ANALYZER_GUIDE.md** - User guide
+- **SPECTRUM_CODE_PATTERNS.md** - Implementation patterns
+- **SPECTRUM_IMPLEMENTATION_GUIDE.md** - Implementation guide
+- **WATERFALL_ANALYSIS.md** - Waterfall display implementation (disabled in v7.6.10)
+
+### Technical Reference
+- **FLASH_AUDIT_K1.md** - FLASH usage audit for K1 hardware
+- **AIRBAND_MODULATION_INVESTIGATION.md** - Airband AM enforcement investigation
+- **AUDIT_REPORT.md** - Code audit report
+- **DEPENDENCY_REFERENCE.md** - File and function dependencies
+- **FILE_HEADER_TEMPLATE.md** - File header template
+- **CODEBASE_ANALYSIS.md** - Code structure and module dependencies
+
+### Reorganization
+- **REORGANIZATION_GUIDE.md** - Code organization improvements
+- **REORGANIZATION_COMPLETE.md** - Reorganization completion report
+
+### User Manuals
+- **Owner's Manual - ApeX Edition.md** - Owner's manual for ApeX Edition
+- **QUICK_REFERENCE_CARD.md** - Pocket reference card
 
 ## File Organization Convention
 
@@ -61,7 +93,11 @@ When creating new documentation:
 
 ## Quick Links
 
-- [Performance & Stability Analysis](./PERFORMANCE_STABILITY_ANALYSIS.md)
-- [Implementation Guide](./IMPLEMENTATION_GUIDE.md)
+- [Release Notes](./RELEASE_NOTES.md)
+- [v7.6.10 Update Summary](./v7.6.10_UPDATE_SUMMARY.md)
 - [Quick Reference](./QUICK_REFERENCE.md)
+- [Critical Fixes Report](./CRITICAL_FIXES_REPORT.md)
+- [Performance & Stability Analysis](./PERFORMANCE_STABILITY_ANALYSIS.md)
 - [Codebase Structure](./CODEBASE_ANALYSIS.md)
+- [Spectrum Analyzer Guide](./SPECTRUM_ANALYZER_GUIDE.md)
+- [Flash Audit (K1)](./FLASH_AUDIT_K1.md)

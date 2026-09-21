@@ -1,8 +1,10 @@
-# UV-K5/K5(8)/K6 SERIES APEX EDITION — v7.6.6 Release & Audit Summary (April 18, 2026)
+# UV-K5/K5(8)/K6 SERIES APEX EDITION — v7.6.10 Release & Audit Summary
 
-**Firmware Version:** v7.6.6 (ApeX Edition)
-**Release Date:** April 18, 2026
-**Status:** All critical and high-priority issues resolved, codebase fully audited and reorganized.
+**Firmware Version:** v7.6.10 (ApeX Edition)
+**Release Date:** September 21, 2026
+**Status:** v7.6.10 release — UI/UX modernization (UV-K1 Fusion), 2-point battery calibration, and FLASH optimization.
+
+> **Note:** The critical security fixes (S1-S4) documented below were implemented in v7.6.6 and remain in effect. This v7.6.10 release builds on the v7.6.6 audit baseline with UI/UX, battery calibration, and FLASH optimization changes.
 
 #### Key Updates:
 - **Critical Security Fixes:**
@@ -46,20 +48,35 @@ All 3 analysis documents have been moved to the Documentation folder, and all 4 
 ### Documentation/ Folder Contents (Updated)
 ```
 Documentation/
-├── README.md (NEW - Directory guide)
-├── QUICK_REFERENCE.md (MOVED from root)
-├── PERFORMANCE_STABILITY_ANALYSIS.md (MOVED from root)
-├── IMPLEMENTATION_GUIDE.md (MOVED from root)
-├── CODEBASE_ANALYSIS.md
-├── DEPENDENCY_REFERENCE.md
-├── SPECTRUM_ANALYSIS.md
-├── WATERFALL_ANALYSIS.md
-├── REORGANIZATION_GUIDE.md
-├── REORGANIZATION_COMPLETE.md
-├── SPECTRUM_CODE_PATTERNS.md
-├── SPECTRUM_IMPLEMENTATION_GUIDE.md
-├── CODEBASE_ANALYSIS.md
-└── *.txt (Various planning documents)
+├── RELEASE_NOTES.md               (v7.6.0 through v7.6.10 release notes)
+├── v7.6.10_UPDATE_SUMMARY.md      (v7.6.10 update summary)
+├── v7.6.6_UPDATE_SUMMARY.md       (v7.6.6 update summary)
+├── CRITICAL_FIXES_REPORT.md       (Implementation status report)
+├── IMPLEMENTATION_COMPLETED.md    (Completed implementation summary)
+├── QUICK_REFERENCE.md             (One-page summary)
+├── PERFORMANCE_STABILITY_ANALYSIS.md (Comprehensive analysis)
+├── IMPLEMENTATION_GUIDE.md        (Code examples and guide)
+├── CODEBASE_ANALYSIS.md           (Code structure)
+├── DEPENDENCY_REFERENCE.md        (File/function dependencies)
+├── REORGANIZATION_GUIDE.md        (Code organization)
+├── REORGANIZATION_COMPLETE.md     (Reorganization report)
+├── SPECTRUM_ANALYSIS.md           (Spectrum analyzer design)
+├── SPECTRUM_ANALYZER_ANALYSIS.md  (Implementation analysis)
+├── SPECTRUM_ANALYZER_GUIDE.md     (User guide)
+├── SPECTRUM_CODE_PATTERNS.md      (Patterns)
+├── SPECTRUM_IMPLEMENTATION_GUIDE.md (Guide)
+├── WATERFALL_ANALYSIS.md          (Waterfall analysis)
+├── FLASH_AUDIT_K1.md              (FLASH usage audit)
+├── AIRBAND_MODULATION_INVESTIGATION.md (Airband investigation)
+├── AUDIT_REPORT.md                (Code audit report)
+├── BATTERY_IMPROVEMENTS_SUMMARY.md (Battery summary)
+├── BATTERY_SYSTEM_ANALYSIS.md     (Battery analysis)
+├── BATTERY_TECHNICAL_REFERENCE.md (Battery reference)
+├── BATTERY_VISUAL_GUIDE.md        (Battery visual guide)
+├── BATTERY_COMPLETION_REPORT.md   (Battery completion report)
+├── FILE_HEADER_TEMPLATE.md        (File header template)
+├── QUICK_REFERENCE_CARD.md        (Pocket reference)
+└── Owner's Manual - ApeX Edition.md (Owner's manual)
 ```
 
 **Convention:** All `.md` and `.txt` files should be created in the Documentation/ folder.

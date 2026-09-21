@@ -1,4 +1,8 @@
-# Firmware Source Audit — ApeX Edition (folder tag v7.6.0 / build tag v7.6.6)
+# Firmware Source Audit — ApeX Edition (folder tag v7.6.0 / build tag v7.6.6, updated for v7.6.10)
+
+> **Audit Context:** This audit was performed on the v7.6.6 build. All findings remain valid for v7.6.10.
+> v7.6.10 adds UI/UX from UV-K1 Fusion (Armel F4HWN), 2-point battery calibration, and disables the
+> waterfall for FLASH optimization. See [RELEASE_NOTES.md](RELEASE_NOTES.md) v7.6.10 section for details.
 
 **Auditor:** Independent senior embedded firmware review (static analysis)
 **Date:** 2026-09-11

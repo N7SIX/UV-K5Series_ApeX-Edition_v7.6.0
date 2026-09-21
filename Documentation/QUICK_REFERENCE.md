@@ -1,8 +1,10 @@
-# UV-K5/K5(8)/K6 SERIES APEX EDITION — v7.6.6 Release & Audit Summary (April 18, 2026)
+# UV-K5/K5(8)/K6 SERIES APEX EDITION — v7.6.10 Release Summary
 
-**Firmware Version:** v7.6.6 (ApeX Edition)
-**Release Date:** April 18, 2026
-**Status:** All critical and high-priority issues resolved, codebase fully audited and reorganized.
+**Firmware Version:** v7.6.10 (ApEX Edition)
+**Release Date:** September 21, 2026
+**Status:** v7.6.10 release — UI/UX modernization (UV-K1 Fusion by Armel F4HWN), 2-point battery calibration, and FLASH optimization.
+
+> **Note:** The analysis, issue matrices, and implementation recommendations in this document originate from the v7.6.6 audit cycle and remain valid. This v7.6.10 release builds on that baseline with UI/UX, battery calibration, and FLASH optimization changes. See [RELEASE_NOTES.md](./RELEASE_NOTES.md) for full v7.6.10 details.
 
 #### Key Updates:
 - **Critical Security Fixes:**

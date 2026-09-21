@@ -2,8 +2,8 @@
 ## Professional Signal Analysis with Bandscope Mode
 
 **For:** Quansheng UV-K5, K5(8)/K6 (Version 1 Only) ApeX Edition  
-**Firmware:** v7.6.0 (v7.6.4br3+ compatible)  
-**Document Version:** 1.1 (Updated March 2, 2026)
+**Firmware:** v7.6.10 (v7.6.4br3+ compatible; waterfall disabled in v7.6.10)  
+**Document Version:** 1.2 (Updated September 21, 2026)
 
 ---
 

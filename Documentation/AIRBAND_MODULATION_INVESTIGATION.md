@@ -1,8 +1,9 @@
 # Airband Modulation Investigation and Correction
 
-Date: May 04, 2026
-Scope: UV-K5Series ApeX Edition v7.6.6 codebase
-Status: Implemented, build-validated
+**Date:** May 04, 2026  
+**Scope:** UV-K5Series ApeX Edition v7.6.6 codebase (airband AM enforcement implemented in v7.6.6, still in effect in v7.6.10)  
+**Status:** Implemented, build-validated, and retained through v7.6.10  
+**Last Updated:** September 21, 2026 (v7.6.10 — confirmed still in effect; see [RELEASE_NOTES.md](RELEASE_NOTES.md) v7.6.10 section)
 
 ## Question Investigated
 A field report stated that airband reception sounded better in USB than AM, and asked whether airband should be AM and how firmware should behave.

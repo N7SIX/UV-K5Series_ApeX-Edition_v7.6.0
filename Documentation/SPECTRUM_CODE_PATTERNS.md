@@ -1,11 +1,13 @@
 
-# UV-K5Series ApeX Edition v7.6.0
+# UV-K5Series ApeX Edition v7.6.10
 #
 # Copyright (c) Dual Tachyon, Egzumer, OneOfEleven, N7SIX, and contributors
 # Enhancements, improvements, and reorganization by Sean, N7SIX
-# Version: v7.6.0
-# Date: March 24, 2026
+# Version: v7.6.10
+# Date: September 21, 2026
 #
+# v7.6.10 changes: UI/UX adopted from UV-K1 Fusion (Armel F4HWN), 2-point battery
+# calibration, waterfall temporarily disabled for FLASH optimization.
 # This file and all documentation in this repository have been updated to reflect the professional reorganization, build system improvements, and feature enhancements performed by Sean, N7SIX. All features are preserved, and the codebase is fully compatible with Quansheng UV-K5, K5(8)/K6 (Version 1 Only) hardware.
 
 # Summary of Enhancements & Improvements

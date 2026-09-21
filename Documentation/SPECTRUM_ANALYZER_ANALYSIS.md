@@ -1,6 +1,7 @@
 # Spectrum Analyzer Implementation Analysis
 
-**Document Status:** Updated March 2, 2026 (v7.6.4br3)  
+**Document Status:** Updated March 2, 2026 (v7.6.4br3)
+**Last Major Update:** September 21, 2026 (v7.6.10 — waterfall disabled, see RELEASE_NOTES.md v7.6.10 section)
 **Previous Version:** v7.6.0 analysis (issues identified and FIXED in v7.6.4br3)
 **Hardware:** Quansheng UV-K5, K5(8)/K6 (Version 1 Only)
 
@@ -147,7 +148,7 @@ The spectrum graph is implemented with extensive professional features: smoothin
 
 ---
 
-**For detailed implementation notes**, see [RELEASE_NOTES.md](RELEASE_NOTES.md) section "v7.6.4br4" for the latest changes or "v7.6.4br3 CRITICAL SPECTRUM ANALYZER FIXES" for the previous release.
+**For detailed implementation notes**, see [RELEASE_NOTES.md](RELEASE_NOTES.md) section "v7.6.10" for the latest changes, section "v7.6.6" for the SysInf and airband fixes, or "v7.6.4br4" for spectrum analyzer fixes.
 
 ---
 

@@ -51,7 +51,41 @@
 - Airband voice channels are AM by design and are now enforced in firmware for the full airband span.
 - Enforcement is applied during VFO init, EEPROM/VFO reload, and user modulation changes.
 - If tuned inside `108.000-136.999 MHz`, modulation resolves to AM.
-- If tuned outside airband, normal user-selected modulation behavior remains unchanged.
+ - If tuned outside airband, normal user-selected modulation behavior remains unchanged.
+
+# UV-K5/K5(8)/K6 SERIES APEX EDITION — v7.6.10 Release & Audit Summary
+
+**Firmware Version:** v7.6.10 (ApeX Edition)
+**Release Date:** September 21, 2026
+**Status:** v7.6.10 release — UI/UX modernization, battery calibration, and FLASH optimization.
+
+#### Key Updates:
+- **Adopted UI/UX from UV-K1's latest Fusion (Armel, F4HWN):**
+  - The interface now incorporates the latest UI/UX design patterns from the UV-K1's Fusion firmware by Armel (F4HWN).
+  - Provides a more intuitive and polished user experience with improved navigation and visual consistency.
+  - Menu layouts, iconography, and interaction flows updated to match the modern UV-K1 standard.
+- **2-point Battery Calibration Implementation:**
+  - New 2-point battery calibration system for more accurate voltage-to-percentage and remaining-capacity estimation across the full discharge curve.
+  - Replaces the previous single-point estimation with a precise curve-fitting approach (low-point + high-point reference).
+  - Calibration is accessible via the battery menu and persists in EEPROM.
+- **Waterfall Disabled (Temporary):**
+  - The waterfall implementation has been temporarily disabled to reclaim FLASH space.
+  - FLASH is at 99.80% capacity (61,316 B used of 61,440 B limit) — the waterfall rendering contributed to the overflow.
+  - The waterfall will be re-enabled once ample FLASH space is reclaimed through further optimization.
+  - The spectrum analyzer remains fully functional; only the temporal waterfall display layer is disabled.
+
+#### Memory Usage:
+```
+Memory Region      Used Size  Region Size   % Used
+FLASH                61316        61440     99.80%
+RAM                   3372         8192     41.16%
+```
+
+#### Getting Started:
+- UVTools: https://n7six.github.io/UVTools/
+- Compile: `./compile-with-docker.sh ApeX` (Docker) or `win_make.bat` (Windows)
+
+---
 
 # UV-K5/K5(8)/K6 SERIES APEX EDITION
 
@@ -760,7 +794,7 @@ Memory Usage:
 
 ---
 
-Document ID: RELEASE-NOTES-v7.6.0  
+Document ID: RELEASE-NOTES-v7.6.10  
 Classification: PUBLIC  
 Distribution: Unrestricted  
 Previous Version: RELEASE-NOTES-v7.5.0
@@ -864,7 +898,7 @@ Memory Usage:
   Delta from v7.5.0: +1024 bytes FLASH
 ```
 ---
-Document ID: RELEASE-NOTES-v7.6.0  
+Document ID: RELEASE-NOTES-v7.6.10  
 Classification: PUBLIC  
 Distribution: Unrestricted  
 Previous Version: RELEASE-NOTES-v7.5.0
@@ -1286,16 +1320,16 @@ USERS ASSUME FULL RESPONSIBILITY FOR:
 ---
 VERSION INFORMATION
 ```
-Build ID:           7.6.0-APEX-20260325
+Build ID:           7.6.10-APEX-20260921
 Platform:           UV-K5/K5(8)/K6 Version 1
 MCU:                BK4819
 Toolchain:          GCC ARM Embedded 13.3.1
-Build Date:         2026-03-25T12:00:00Z
-Git Commit:         [main branch, head commit]
-Binary CRC32:       0x12AB34CD (example)
+Build Date:         2026-09-21T05:41:32Z
+Git Commit:         7b438cd (main branch, head commit)
+Binary CRC32:       Pending CI build output
 ```
 ---
-Document ID: RELEASE-NOTES-v7.6.0  
+Document ID: RELEASE-NOTES-v7.6.10  
 Classification: PUBLIC  
 Distribution: Unrestricted
 ---

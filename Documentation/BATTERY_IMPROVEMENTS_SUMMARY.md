@@ -328,3 +328,41 @@ The battery management system is now **more robust, accurate, and reliable**:
 
 **SysInf menu now displays truly accurate and physically meaningful battery information!** ✅
 
+---
+
+## v7.6.10 Enhancement: 2-Point Battery Calibration
+
+**Date:** September 21, 2026  
+**Status:** ✅ Implemented and validated
+
+### What's New
+
+v7.6.10 introduces a **2-point battery calibration system** that complements the improvements documented above:
+
+- **2-point calibration** replaces the previous single-point voltage-to-percentage estimation
+- **Low-point** and **high-point** reference calibration for more accurate estimation across the full discharge curve
+- **Curve-fitting approach** provides precise voltage-to-percentage mapping at all battery levels, not just at calibration points
+- Accessible via the **battery menu** in SysInf
+- Persists in **EEPROM** across power cycles
+
+### How It Builds on Previous Work
+
+| Previous (v7.6.6) | Enhanced (v7.6.10) | Improvement |
+|---|---|---|
+| 5-point piecewise interpolation | 2-point calibration + curve-fitting | More accurate full-curve estimation |
+| Health derating via aging | Health + 2-point curve fit | Combined accuracy + aging correction |
+| Low-battery hysteresis (50mV) | Same hysteresis + calibrated curve | Stable thresholds at all levels |
+| Overcharge monitoring | Same + calibrated curve | Accurate full-range monitoring |
+
+### Memory Impact
+
+The 2-point calibration adds a small memory footprint:
+
+```
+Memory Region      Used Size  Region Size   % Used
+FLASH                61316        61440     99.80%
+RAM                   3372         8192     41.16%
+```
+
+> **Note:** The waterfall implementation was temporarily disabled in v7.6.10 to accommodate the increased FLASH usage from the 2-point calibration and UI/UX enhancements (see [RELEASE_NOTES.md](RELEASE_NOTES.md) v7.6.10 section).
+
