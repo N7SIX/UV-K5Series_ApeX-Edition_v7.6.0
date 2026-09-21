@@ -27,44 +27,89 @@
 
 #include "driver/backlight.h"
 #include "frequencies.h"
-#include "helper/rssi_calibration.h" // dBmCorrTable (band RSSI->dBm correction)
 #include "ui/helper.h"
 #include "ui/main.h"
-
-// ---------------------------------------------------------------------------
-// Compile-time size toggles (driven by the Makefile ENABLE_SPECTRUM_* options).
-// 0 = compile the feature out (saves FLASH), 1 = compile it in.
-// The Makefile always passes explicit values; the #ifndef defaults keep a bare
-// compile at the minimal-FLASH configuration.
-// ---------------------------------------------------------------------------
-#ifndef ENABLE_PEAK_HOLD
-#define ENABLE_PEAK_HOLD 0 // Peak hold dotted trace (RAM + ~500 B FLASH)
-#endif
-#ifndef ENABLE_SPECTRUM_SMOOTHING
-#define ENABLE_SPECTRUM_SMOOTHING 0 // 3-bin curve smoothing (~300 B FLASH)
-#endif
-#ifndef ENABLE_SPECTRUM_SHADE
-#define ENABLE_SPECTRUM_SHADE 1 // Checkerboard body shade under the trace
-#endif
-#ifndef ENABLE_RSSI_SQRT
-#define ENABLE_RSSI_SQRT 0 // Square-root RSSI compression (~300 B FLASH)
-#endif
-#ifndef ENABLE_SPECTRUM_REG_MENU
-#define ENABLE_SPECTRUM_REG_MENU 0 // STILL-mode LNA/PGA register menu (~700 B)
-#endif
-#ifndef ENABLE_SPECTRUM_BIDIR
-#define ENABLE_SPECTRUM_BIDIR 0 // Bidirectional sweeps (~400 B FLASH)
-#endif
-#ifndef ENABLE_SPECTRUM_BLACKLIST
-#define ENABLE_SPECTRUM_BLACKLIST 0 // KEY_SIDE1 noise-frequency blacklist
-#endif
 
 #ifdef ENABLE_FEAT_F4HWN_K5VIEWER
 #include "k5viewer.h"
 #endif
 
-#ifdef ENABLE_FEAT_F4HWN_SPECTRUM
+// The UV-K1 extras persist spectrum settings in the spare PY25Q16 flash area.
+// The include is unconditional (the driver is always linked); only the calls
+// inside this file are conditional.  It must sit above the shim below, which is
+// what decides whether ENABLE_FEAT_F4HWN_SPECTRUM is defined.
 #include "driver/py25q16.h"
+
+/* ---------------------------------------------------------------------------
+ * UV-K1 (K1-lineage) build-switch shim
+ * ---------------------------------------------------------------------------
+ * This spectrum analyzer comes from the UV-K1 firmware, where it is guarded by
+ * the K1 tree's ENABLE_FEAT_F4HWN* switches.  Map those switches onto this
+ * (ApeX Edition / DP32G030) tree's option set so the same source builds here:
+ *
+ *   ENABLE_FEAT_F4HWN               always on: this tree's ui/helper.c owns
+ *                                   PutPixel(), PutPixelStatus() and
+ *                                   GUI_DisplaySmallest().
+ *   ENABLE_FEAT_F4HWN_SPECTRUM      = ENABLE_SPECTRUM_K1_EXTRAS (Makefile
+ *                                   option, default 0): the K1-only extras
+ *                                   (LNA/PGA/VGA register menu with dB readout,
+ *                                   channel name in the status bar, tail
+ *                                   detect, settings persisted in the spare
+ *                                   PY25Q16 flash).
+ *   ENABLE_FEAT_F4HWN_RESUME_STATE  = ENABLE_FEAT_N7SIX_RESUME_STATE.
+ *   ENABLE_FEAT_F4HWN_K5VIEWER      off: this tree has no K5VIEWER module.
+ * ---------------------------------------------------------------------------
+ */
+#ifndef ENABLE_SPECTRUM_K1_EXTRAS
+#define ENABLE_SPECTRUM_K1_EXTRAS 0
+#endif
+
+#if defined(ENABLE_SPECTRUM_K1_EXTRAS) && ENABLE_SPECTRUM_K1_EXTRAS && !defined(ENABLE_FEAT_F4HWN_SPECTRUM)
+#define ENABLE_FEAT_F4HWN_SPECTRUM
+#endif
+
+#ifdef ENABLE_FEAT_N7SIX
+#ifndef ENABLE_FEAT_F4HWN
+#define ENABLE_FEAT_F4HWN
+#endif
+#endif
+
+#ifdef ENABLE_FEAT_N7SIX_RESUME_STATE
+#ifndef ENABLE_FEAT_F4HWN_RESUME_STATE
+#define ENABLE_FEAT_F4HWN_RESUME_STATE
+#endif
+#endif
+
+/* ---------------------------------------------------------------------------
+ * Optional-feature size toggles
+ * ---------------------------------------------------------------------------
+ * The UV-K1 sources build every cosmetic feature unconditionally, which costs
+ * ~1.1 KB of the UV-K5's 61 KB flashable area.  These switches (driven by the
+ * Makefile's ENABLE_PEAK_HOLD / ENABLE_SPECTRUM_* options) allow a flash
+ * constrained build to drop them again.  1 = compiled in, 0 = compiled out; the
+ * #ifndef defaults keep a bare compile at the minimum-FLASH configuration.
+ * ---------------------------------------------------------------------------
+ */
+#ifndef ENABLE_PEAK_HOLD
+#define ENABLE_PEAK_HOLD 0
+#endif
+#ifndef ENABLE_SPECTRUM_SMOOTHING
+#define ENABLE_SPECTRUM_SMOOTHING 0
+#endif
+#ifndef ENABLE_SPECTRUM_SHADE
+#define ENABLE_SPECTRUM_SHADE 0
+#endif
+#ifndef ENABLE_SPECTRUM_REG_MENU
+#define ENABLE_SPECTRUM_REG_MENU 0
+#endif
+#ifndef ENABLE_SPECTRUM_BIDIR
+#define ENABLE_SPECTRUM_BIDIR 0
+#endif
+#ifndef ENABLE_SPECTRUM_BLACKLIST
+#define ENABLE_SPECTRUM_BLACKLIST 0
+#endif
+#ifndef ENABLE_RSSI_SQRT
+#define ENABLE_RSSI_SQRT 0
 #endif
 
 struct FrequencyBandInfo
@@ -77,20 +122,20 @@ struct FrequencyBandInfo
 #define F_MIN frequencyBandTable[0].lower
 #define F_MAX frequencyBandTable[BAND_N_ELEM - 1].upper
 
-#define RSSI_MAX_VALUE 65535 // sentinel: "no measurement / invalid sample"
+const uint16_t RSSI_MAX_VALUE = 65535;
 
 static uint32_t initialFreq;
 static char String[32];
 
 static bool isInitialized = false;
-static bool isListening = true;
-static bool monitorMode = false;
-static bool redrawStatus = true;
-static bool redrawScreen = false;
-static bool newScanStart = true;
-static bool preventKeypress = true;
-static bool audioState = true;
-static bool lockAGC = false;
+bool isListening = true;
+bool monitorMode = false;
+bool redrawStatus = true;
+bool redrawScreen = false;
+bool newScanStart = true;
+bool preventKeypress = true;
+bool audioState = true;
+bool lockAGC = false;
 
 State currentState = SPECTRUM, previousState = SPECTRUM;
 
@@ -100,7 +145,7 @@ static KeyboardState kbd = {KEY_INVALID, KEY_INVALID, 0};
 static bool menuKeyPendingShort = false;
 static bool menuKeyLongHandled = false;
 
-#ifdef ENABLE_SCAN_RANGES
+#if defined(ENABLE_SCAN_RANGES) || ENABLE_SPECTRUM_BLACKLIST
 static uint16_t blacklistFreqs[15];
 static uint8_t blacklistFreqsIdx;
 #endif
@@ -137,11 +182,13 @@ static uint8_t  peakHoldAge[64];      // Shared decay timer (1 per 2 columns)
 // call (saves 1 SPI read per step = fewer SPI bus events = less SPI-induced audio interference).
 static uint16_t scanReg30 = 0;
 
-#if ENABLE_SPECTRUM_BIDIR
-// Bidirectional sweep: true = left?right (fStart?fEnd), false = right?left.
+// Bidirectional sweep: true = left→right (fStart→fEnd), false = right→left.
+// With ENABLE_SPECTRUM_BIDIR=0 every assignment in this file pins these to
+// their forward/left state, so LTO const-folds them away entirely.
 static bool scanForward = true;
 // Alternate sweep start side across full sweep cycles to reduce directional bias.
 static bool scanStartFromLeft = true;
+#if ENABLE_SPECTRUM_BIDIR
 // True until the opposite half-sweep is completed.
 static bool scanReturnPending = true;
 #endif
@@ -189,14 +236,9 @@ static AutoSensitivityProfile autoSensitivity = AUTO_SENS_NORMAL;
 
 // Hysteresis and debounce for listen state.
 // 1 RSSI unit ~= 0.5 dB.
-// P0/P1 latency tune: settle 1000 -> 100 ticks on RX open (AF DAC + amp only
-// need ~ms to settle), listen re-arm 500 -> 200 ticks, release 4 -> 3 lows.
-// Worst-case RX-close tail drops from ~2 s to ~600 ms.
 #define LISTEN_OPEN_HYST_RSSI    4   // +2 dB above trigger to open
 #define LISTEN_CLOSE_HYST_RSSI   4   // -2 dB below trigger to keep listening
-#define LISTEN_RELEASE_LOW_COUNT 3   // consecutive low reads before release
-#define LISTEN_SETTLE_TICKS      100 // RX-open settle window (~100 ms)
-#define LISTEN_REARM_TICKS       200 // re-arm window while signal present
+#define LISTEN_RELEASE_LOW_COUNT 4   // consecutive low reads before release
 #define LISTEN_DROP_EXIT_RSSI   20   // 10 dB abrupt drop => leave RX
 static uint8_t listenLowCount = 0;
 static uint16_t listenPrevRssi = RSSI_MAX_VALUE;
@@ -228,6 +270,7 @@ const RegisterSpec registerSpecs[] = {
     //{"BPF", BK4819_REG_3D, 0, 0xFFFF, 0x2aaa},
     // {"MIX", 0x13, 3, 0b11, 1}, // TODO: hidden
 };
+#endif
 
 #ifdef ENABLE_FEAT_F4HWN_SPECTRUM
 const int8_t LNAsOptions[] = {-19, -16, -11, 0};
@@ -235,6 +278,7 @@ const int8_t LNAOptions[] = {-24, -19, -14, -9, -6, -4, -2, 0};
 const int8_t VGAOptions[] = {-33, -27, -21, -15, -9, -6, -3, 0};
 //const char *BPFOptions[] = {"8.46", "7.25", "6.35", "5.64", "5.08", "4.62", "4.23"};
 
+#if ENABLE_SPECTRUM_REG_MENU
 typedef struct {
     const int8_t *options;
     uint8_t count;
@@ -246,8 +290,8 @@ static const MenuOptions regOptions[] = {
     {LNAOptions, 8},       // LNA
     {VGAOptions, 8}        // VGA
 };
-#endif
 #endif // ENABLE_SPECTRUM_REG_MENU
+#endif
 
 uint16_t statuslineUpdateTimer = 0;
 
@@ -367,11 +411,8 @@ static void SetRegMenuValue(uint8_t st, bool add)
 #endif // ENABLE_SPECTRUM_REG_MENU
 
 // GUI functions
-//
-// NOTE: when ENABLE_FEAT_N7SIX is defined, PutPixel / PutPixelStatus /
-// GUI_DisplaySmallest are provided by ui/helper.c and declared (non-static)
-// in ui/helper.h � so we must NOT define our own static copies here.
-#ifndef ENABLE_FEAT_N7SIX
+
+#ifndef ENABLE_FEAT_F4HWN
 static void PutPixel(uint8_t x, uint8_t y, bool fill)
 {
     UI_DrawPixelBuffer(gFrameBuffer, x, y, fill);
@@ -382,7 +423,7 @@ static void PutPixelStatus(uint8_t x, uint8_t y, bool fill)
 }
 #endif
 
-#ifndef ENABLE_FEAT_N7SIX
+#ifndef ENABLE_FEAT_F4HWN
 static void GUI_DisplaySmallest(const char *pString, uint8_t x, uint8_t y,
                                 bool statusbar, bool fill)
 {
@@ -420,7 +461,7 @@ static int clamp(int v, int min, int max)
     return v <= min ? min : (v >= max ? max : v);
 }
 
-static uint16_t abs_int16(int16_t v) { return v < 0 ? (uint16_t)(-(uint32_t)v) : (uint16_t)v; }
+static uint16_t my_abs(int16_t v) { return v < 0 ? (uint16_t)(-v) : (uint16_t)v; }
 
 void SetState(State state)
 {
@@ -431,6 +472,15 @@ void SetState(State state)
 }
 
 // Radio functions
+
+static void ToggleAFBit(bool on)
+{
+    uint16_t reg = BK4819_ReadRegister(BK4819_REG_47);
+    reg &= ~(1 << 8);
+    if (on)
+        reg |= on << 8;
+    BK4819_WriteRegister(BK4819_REG_47, reg);
+}
 
 static const BK4819_REGISTER_t registers_to_save[] = {
     BK4819_REG_30,
@@ -465,112 +515,13 @@ static void RestoreRegisters()
 #endif
 }
 
-// ---------------------------------------------------------------------------
-// RX audio route (listen mode)
-//
-// Three independent things must all be true before a listen window is audible:
-//
-//   1. BK4819 REG_47 <11:8>  AF demodulator selection (FM/AM/USB, 0 = MUTE)
-//   2. BK4819 REG_30 bit 9   AF DAC enable
-//   3. GPIOC AUDIO_PATH      external audio amplifier
-//
-// Spectrum never re-asserted (1).  Any event that latches REG_47 to
-// BK4819_AF_MUTE therefore silences the receiver permanently.  A tone or beep
-// does exactly that: BK4819_PlayTone() selects BK4819_AF_BEEP and the tail
-// routine BK4819_TurnsOffTones_TurnsOnRX() deliberately leaves
-// BK4819_AF_MUTE behind.  The low-battery warning beep is exempt from the
-// "no beeps while receiving" guard in AUDIO_Beep(), so it can fire at any
-// point during a sweep.
-//
-// REG_47 must be reprogrammed through BK4819_SetAF(): bits <11:8> are a 4-bit
-// field, so the legacy ToggleAFBit() hack of toggling bit 8 alone is only ever
-// correct for FM (AM 7->6, USB 5->4, RAW 4->5 all select a different
-// demodulator), which is why the old code produced no audio once a beep had
-// run in AM/USB/RAW.
-// ---------------------------------------------------------------------------
-
-// REG_30 bit 9 = AF DAC enable.  SetFScan() reloads REG_30 from scanReg30,
-// which has bit 9 masked off, so this has to be re-applied for every listen.
 static void ToggleAFDAC(bool on)
 {
-    uint16_t Reg = BK4819_ReadRegister(BK4819_REG_30);
+    uint32_t Reg = BK4819_ReadRegister(BK4819_REG_30);
+    Reg &= ~(1 << 9);
     if (on)
-        Reg |= BK4819_REG_30_MASK_ENABLE_AF_DAC;
-    else
-        Reg &= ~BK4819_REG_30_MASK_ENABLE_AF_DAC;
+        Reg |= (1 << 9);
     BK4819_WriteRegister(BK4819_REG_30, Reg);
-}
-
-// REG_48 AF Rx Gain-1/Gain-2 + AF DAC gain, programmed exactly as the normal RX
-// path does so listen audio is as loud as a regular reception.  REG_48 is in
-// registers_to_save[], so the pre-spectrum value is restored on exit.
-static void ApplyRxAudioGain(void)
-{
-    BK4819_WriteRegister(BK4819_REG_48,
-        (11u << 12)                |     // ??? .. 0 ~ 15, no audible difference
-        ( 0u << 10)                |     // AF Rx Gain-1: 0dB
-        (gEeprom.VOLUME_GAIN << 4) |     // AF Rx Gain-2
-        (gEeprom.DAC_GAIN    << 0));     // AF DAC gain
-}
-
-// Audio path GPIO.  Deliberately stateless: AUDIO_Beep() drives this same pin
-// directly, so a cached "audio is on" flag goes stale and the pin is then never
-// turned back on.  Two GPIO bit writes are free compared with losing reception.
-static void ToggleAudio(bool on)
-{
-    audioState = on;
-    if (on)
-        AUDIO_AudioPathOn();
-    else
-        AUDIO_AudioPathOff();
-}
-
-// Full re-assert of the RX audio route.  Cheap enough to run on every listen
-// window: it is a single SPI burst at the same cadence as the RSSI measurement
-// that already happens there (~5 Hz, far below the audible range).
-// NOTE: RADIO_SetModulation() must run on EVERY call.  DisableListenAudio()
-// latches REG_47 <11:8> to BK4819_AF_MUTE on every sweep phase, so the AF
-// demodulator selection can never be cached between listen windows -- skipping
-// it here leaves the receiver permanently silent (and the EnsureListenAudio()
-// repair path dead, since it funnels back into this function).
-static void EnableListenAudio(void)
-{
-    // Correct AF selection for settings.modulationType, plus the REG_3D
-    // band-pass, the REG_48 AF DAC gain and the AFC setting.
-    // NOTE: no RADIO_SetupAGC() here - ToggleRX(true) has already armed the
-    // non-AM AGC profile, and the beep-repair path (EnsureListenAudio) runs
-    // while that profile is still valid (beeps never touch REG_7E).
-    RADIO_SetModulation(settings.modulationType);
-
-    ToggleAFDAC(true);   // REG_30 bit 9: AF DAC
-    ApplyRxAudioGain();  // REG_48: AF gain / DAC gain
-
-    if (gEnableSpeaker)
-        ToggleAudio(true);
-
-    // Let the AF DAC and the external amplifier settle before demodulated
-    // audio is expected at the speaker.
-    SYSTICK_DelayUs(50);
-}
-
-// Full mute for the sweep phase � the mirror image of EnableListenAudio().
-static void DisableListenAudio(void)
-{
-    BK4819_SetAF(BK4819_AF_MUTE);  // REG_47 <11:8> = 0 -> no demodulator
-    ToggleAFDAC(false);            // REG_30 bit 9 -> AF DAC off
-    ToggleAudio(false);            // amplifier off
-}
-
-// Repair the AF route if a tone/beep muted it while a listen window was open.
-// Costs one SPI read in the common case; the full refresh only runs when the
-// AF field really is zero.
-static void EnsureListenAudio(void)
-{
-    // REG_47 <11:8> holds the AF mode; 0 is BK4819_AF_MUTE.
-    if ((BK4819_ReadRegister(BK4819_REG_47) & 0x0F00u) == 0)
-        EnableListenAudio();
-    else
-        ToggleAudio(true);
 }
 
 static uint32_t NormalizeScanFrequency(uint32_t f)
@@ -611,22 +562,15 @@ static void SetFScan(uint32_t f)
 
 // Spectrum related
 
-static bool IsRssiOverOpenLevel(uint16_t rssi)
+static bool IsPeakOverOpenLevel()
 {
-    if (settings.rssiTriggerLevel == RSSI_MAX_VALUE)
-        return false;
     uint16_t openLevel = settings.rssiTriggerLevel;
     if (openLevel <= (uint16_t)(RSSI_MAX_VALUE - LISTEN_OPEN_HYST_RSSI))
         openLevel += LISTEN_OPEN_HYST_RSSI;
     else
         openLevel = RSSI_MAX_VALUE;
 
-    return rssi >= openLevel;
-}
-
-static bool IsPeakOverOpenLevel()
-{
-    return IsRssiOverOpenLevel(peak.rssi);
+    return peak.rssi >= openLevel;
 }
 
 static bool IsListeningSignalPresent(uint16_t rssi)
@@ -725,20 +669,7 @@ static void TuneToPeak()
     scanInfo.f = peak.f;
     scanInfo.rssi = peak.rssi;
     scanInfo.i = peak.i;
-    // Scan context (audio not open yet): cached-register path is enough;
-    // EnableListenAudio() re-arms the AF DAC after the final tune.
-    SetFScan(scanInfo.f);
-}
-
-// Shared "stop and listen on the strongest bin" sequence for both sweep-end
-// sites (normal + interlaced).  Tunes to the true carrier, then opens RX.
-static void FineTuneToPeak(void);
-static void ToggleRX(bool on);
-static void OpenOnPeak()
-{
-    TuneToPeak();
-    FineTuneToPeak();
-    ToggleRX(true);
+    SetF(scanInfo.f);
 }
 
 static void DeInitSpectrum()
@@ -767,41 +698,22 @@ uint16_t GetRssi()
     return rssi;
 }
 
-// Land on the actual carrier instead of the peak bin centre.  Bins are spaced
-// by the scan step (e.g. 25 kHz) and the grid starts at currentFreq - BW/2,
-// so a signal can sit up to +/- half a step away from the tuned frequency;
-// FM demod of an off-centre carrier sounds distorted / hollow ("off station")
-// even though the displayed frequency is the correct bin.  Sample the RSSI of
-// both neighbours of the peak bin and settle on the strongest - the true
-// carrier position.
-static void __attribute__((noinline)) FineTuneToPeak()
+static void ToggleAudio(bool on)
 {
-    const uint16_t step = GetScanStep();   // 0.01 kHz units
-    uint16_t best = peak.rssi;
-    uint32_t f = peak.f, f2;
-    uint16_t r;
-
-    f2 = peak.f - step;
-    SetFScan(f2);
-    r = GetRssi();
-    if (r > best) { best = r; f = f2; }
-
-    f2 = peak.f + step;
-    SetFScan(f2);
-    r = GetRssi();
-    if (r > best) { best = r; f = f2; }
-
-    if (best != peak.rssi)     // 16-bit test: best only moves when a probe won
+    if (on == audioState)
     {
-        peak.f = f;        // keep display/trigger on the true carrier
-        peak.rssi = best;
+        return;
     }
-    // PLL is already on the chosen frequency: TuneToPeak()'s SetFScan parked
-    // it on the centre and the probes parked it on the winner.  The audio
-    // path is opened afterwards by ToggleRX(true) -> EnableListenAudio(),
-    // which re-arms the AF DAC regardless of what the scans did to REG_30.
+    audioState = on;
+    if (on)
+    {
+        AUDIO_AudioPathOn();
+    }
+    else
+    {
+        AUDIO_AudioPathOff();
+    }
 }
-
 
 static void ToggleRX(bool on)
 {
@@ -817,39 +729,32 @@ static void ToggleRX(bool on)
 
     BK4819_ToggleGpioOut(BK4819_GPIO6_PIN2_GREEN, on);
 
+    ToggleAudio(on);
+    ToggleAFDAC(on);
+    ToggleAFBit(on);
+
     if (on)
     {
-        // Rebuild the complete AF route.  It must not be assumed to still be
-        // armed: a beep or tone anywhere during the sweep leaves REG_47 latched
-        // to BK4819_AF_MUTE and may leave the audio path pin off.
-        EnableListenAudio();
-
         listenLowCount = 0;
         // Seed with the RSSI that opened the squelch so the very first measure
         // can already detect an abrupt drop (quick-PTT case where the operator
         // released before listen was actually engaged).
+        // listenPrevRssi = RSSI_MAX_VALUE; // previous behavior
         listenPrevRssi = peak.rssi;
-
-        // Narrow the IF filter for listening only after the audio route is up,
-        // so the first demodulated samples are not lost while it settles.
-        BK4819_WriteRegister(0x43, listenBWRegValues[settings.listenBw]);
-
     #ifdef ENABLE_FEAT_F4HWN_SPECTRUM
         listenT = 25;
+        BK4819_WriteRegister(0x43, listenBWRegValues[settings.listenBw]);
         setTailFoundInterrupt();
     #else
-        listenT = LISTEN_SETTLE_TICKS;
+        listenT = 1000;
+        BK4819_WriteRegister(0x43, listenBWRegValues[settings.listenBw]);
     #endif
     }
     else
     {
-        // Sweep phase: mute the demodulator, drop the AF DAC and release the
-        // external audio amplifier so the sweep is silent.
-        DisableListenAudio();
-
-        BK4819_WriteRegister(0x43, GetBWRegValueForScan());
         listenLowCount = 0;
         listenPrevRssi = RSSI_MAX_VALUE;
+        BK4819_WriteRegister(0x43, GetBWRegValueForScan());
     }
 }
 
@@ -864,7 +769,7 @@ static void ResetScanStats()
     scanInfo.fPeak = 0;
 }
 
-// Resets scan position and stats without touching the radio � safe to call
+// Resets scan position and stats without touching the radio — safe to call
 // on every sweep restart because scanReg30 and the RF filter path remain
 // valid as long as the scan range hasn't changed.
 static void InitScanPosition()
@@ -872,47 +777,43 @@ static void InitScanPosition()
     ResetScanStats();
     scanInfo.scanStep = GetScanStep();
     scanInfo.measurementsCount = GetStepsCount();
-#if ENABLE_SPECTRUM_BIDIR
-    bool startFromLeft = scanStartFromLeft;
 #if SPECTRUM_INTERLACE_LARGE_SWEEPS
     interlacePhase = 0;
     interlaceStride = 1;
     if (scanInfo.measurementsCount > ARRAY_SIZE(rssiHistory))
     {
         // Keep interlaced scans deterministic from the left edge.
-        startFromLeft = true;
         interlaceStride =
             (scanInfo.measurementsCount + ARRAY_SIZE(rssiHistory) - 1) /
             ARRAY_SIZE(rssiHistory);
     }
 #endif
-    if (!startFromLeft && scanInfo.measurementsCount > 1)
+#if ENABLE_SPECTRUM_BIDIR
     {
-        scanInfo.i = scanInfo.measurementsCount - 1;
-        scanInfo.f = GetFEnd();
-        scanForward = false;
-    }
-    else
-    {
-        scanInfo.i = 0;
-        scanInfo.f = GetFStart();
-        scanForward = true;
-    }
-    scanReturnPending = scanInfo.measurementsCount > 1;
-#else  // !ENABLE_SPECTRUM_BIDIR: sweeps always run left -> right
+        bool startFromLeft = scanStartFromLeft;
 #if SPECTRUM_INTERLACE_LARGE_SWEEPS
-    interlacePhase = 0;
-    interlaceStride = 1;
-    if (scanInfo.measurementsCount > ARRAY_SIZE(rssiHistory))
-    {
-        interlaceStride =
-            (scanInfo.measurementsCount + ARRAY_SIZE(rssiHistory) - 1) /
-            ARRAY_SIZE(rssiHistory);
-    }
+        if (scanInfo.measurementsCount > ARRAY_SIZE(rssiHistory))
+            startFromLeft = true;
 #endif
+        if (!startFromLeft && scanInfo.measurementsCount > 1)
+        {
+            scanInfo.i = scanInfo.measurementsCount - 1;
+            scanInfo.f = GetFEnd();
+            scanForward = false;
+        }
+        else
+        {
+            scanInfo.i = 0;
+            scanInfo.f = GetFStart();
+            scanForward = true;
+        }
+        scanReturnPending = scanInfo.measurementsCount > 1;
+    }
+#else
     scanInfo.i = 0;
     scanInfo.f = GetFStart();
-#endif // ENABLE_SPECTRUM_BIDIR
+    scanForward = true;
+#endif
 }
 
 static void InitScan()
@@ -928,7 +829,6 @@ static void InitScan()
     scanReg30 = BK4819_ReadRegister(BK4819_REG_30) & ~(1u << 9);
 }
 
-#if ENABLE_SPECTRUM_BLACKLIST
 static void ResetBlacklist()
 {
     for (int i = 0; i < 128; ++i)
@@ -936,17 +836,11 @@ static void ResetBlacklist()
         if (rssiHistory[i] == RSSI_MAX_VALUE)
             rssiHistory[i] = 0;
     }
-#ifdef ENABLE_SCAN_RANGES
+#if defined(ENABLE_SCAN_RANGES) || ENABLE_SPECTRUM_BLACKLIST
     memset(blacklistFreqs, 0, sizeof(blacklistFreqs));
     blacklistFreqsIdx = 0;
 #endif
 }
-#else
-// Feature compiled out: keep the call sites valid with an empty reset.
-static void ResetBlacklist(void)
-{
-}
-#endif
 
 static void RelaunchScan()
 {
@@ -1021,14 +915,14 @@ static void AutoTriggerLevel()
     // Faster convergence when the gap is large (e.g. after filter BW change).
     int16_t diff  = (int16_t)target - (int16_t)settings.rssiTriggerLevel;
     bool diffSign = diff < 0;
-    uint16_t absDiff = abs_int16(diff);
+    uint16_t absDiff = my_abs(diff);
 
     if (absDiff > 4)
     {
         int16_t step = (absDiff > 12) ? 4 : ((absDiff > 6) ? 2 : 1);
         settings.rssiTriggerLevel += diffSign ? -step : step;
     }
-    // Dead zone �4: hold steady to avoid jitter near target
+    // Dead zone ±4: hold steady to avoid jitter near target
 
     if (settings.rssiTriggerLevel != oldTrigger)
         redrawStatus = true;
@@ -1114,11 +1008,7 @@ static void RequestAutoTriggerRecalibration()
 static void RearmRuntimeState()
 {
     settings.dbMin = -128;
-    // Widen the initial dB window so the noise floor on a quiet band
-    // appears near the bottom instead of spanning the full display.
-    // After the first sweep completes, FinalizeCompletedSweep() auto-scales
-    // dbMax to the measured peak, narrowing the window to the relevant range.
-    settings.dbMax = -50;
+    settings.dbMax = -97;
     memset(rssiHistory, 0, sizeof(rssiHistory));
 #if ENABLE_PEAK_HOLD
     memset(peakHoldY,   PEAK_HOLD_INIT, sizeof(peakHoldY));
@@ -1160,9 +1050,7 @@ static void ResetSpectrumToDefaults()
 
     listenLowCount = 0;
     listenPrevRssi = RSSI_MAX_VALUE;
-#if ENABLE_SPECTRUM_BIDIR
     scanStartFromLeft = true;
-#endif
 
     RearmRuntimeState();
     ResetBlacklist();
@@ -1217,15 +1105,6 @@ static void UpdateAutoSensitivity(bool inc)
 
 static void UpdateRssiTriggerLevel(bool inc)
 {
-    // Seed from the window bottom if AUTO has not calibrated yet: applying
-    // +/-2 directly to the RSSI_MAX_VALUE sentinel (65535) wraps around
-    // uint16_t (+2 -> 1, clamps to window bottom; -2 -> 65533, slams dbMax
-    // to max) and the first key press would jump the line to an extreme
-    // instead of moving it sensibly.  Bottom edge keeps the line visible and
-    // adjustable from the very first press.
-    if (settings.rssiTriggerLevel == RSSI_MAX_VALUE)
-        settings.rssiTriggerLevel = dbm2rssi(settings.dbMin);
-
     if (inc)
         settings.rssiTriggerLevel += 2;
     else
@@ -1300,24 +1179,23 @@ static void ResumeSweepInDirection(bool forward)
     ResetPeak();
     InitScanPosition();
 
-#if ENABLE_SPECTRUM_BIDIR
-    if (forward || scanInfo.measurementsCount <= 1)
+    if (forward || scanInfo.measurementsCount <= 1
+#if !ENABLE_SPECTRUM_BIDIR
+        || true /* monodirectional build: always resume left→right */
+#endif
+    )
     {
         scanForward = true;
         scanInfo.i = 0;
         scanInfo.f = GetFStart();
     }
+#if ENABLE_SPECTRUM_BIDIR
     else
     {
         scanForward = false;
         scanInfo.i = scanInfo.measurementsCount - 1;
         scanInfo.f = GetFEnd();
     }
-#else
-    // Bidirectional sweeps are compiled out: always restart forward.
-    (void)forward;
-    scanInfo.i = 0;
-    scanInfo.f = GetFStart();
 #endif
 
     newScanStart = false;
@@ -1337,7 +1215,7 @@ static void UpdateFreqChangeStep(bool inc)
     {
         settings.frequencyChangeStep -= diff;
     }
-    // Removed blocking SYSTEM_DelayMs(100) - let UI update naturally
+    SYSTEM_DelayMs(100);
     redrawScreen = true;
 }
 
@@ -1370,20 +1248,13 @@ static void ToggleModulation()
 
 static void ToggleListeningBW()
 {
-    switch (settings.listenBw)
+    if (settings.listenBw == BK4819_FILTER_BW_NARROWER)
     {
-        case BK4819_FILTER_BW_WIDE:
-            settings.listenBw = BK4819_FILTER_BW_NARROW;
-            break;
-        case BK4819_FILTER_BW_NARROW:
-            settings.listenBw = BK4819_FILTER_BW_NARROWER;
-            break;
-        case BK4819_FILTER_BW_NARROWER:
-            settings.listenBw = BK4819_FILTER_BW_WIDE;
-            break;
-        default:
-            settings.listenBw = BK4819_FILTER_BW_WIDE;
-            break;
+        settings.listenBw = BK4819_FILTER_BW_WIDE;
+    }
+    else
+    {
+        settings.listenBw++;
     }
     redrawScreen = true;
 }
@@ -1393,31 +1264,27 @@ static void ToggleBacklight()
     settings.backlightState = !settings.backlightState;
     if (settings.backlightState)
     {
-        BACKLIGHT_TurnOn();
+        // BACKLIGHT_TurnOn();
+        BACKLIGHT_SetBrightness(gEeprom.BACKLIGHT_MAX);
     }
     else
     {
-        BACKLIGHT_TurnOff();
+        // BACKLIGHT_TurnOff();
+        BACKLIGHT_SetBrightness(gEeprom.BACKLIGHT_MIN);
     }
 }
 
 static void ToggleStepsCount()
 {
-    // StepsCount enum: STEPS_128=0, STEPS_64=1, STEPS_32=2, STEPS_16=3;
-    // GetStepsCount() = 128 >> stepsCount, so incrementing halves the count.
-    // Cycle 128 -> 64 -> 32 -> 16 -> 128.
-    if (settings.stepsCount >= STEPS_16)
+    if (settings.stepsCount == STEPS_128)
     {
-        settings.stepsCount = STEPS_128;
+        settings.stepsCount = STEPS_16;
     }
     else
     {
-        settings.stepsCount++;
+        settings.stepsCount--;
     }
-
-    uint16_t bw = GetBW();
-    // Guard against division-by-zero / degenerate step behavior
-    settings.frequencyChangeStep = (bw > 1) ? (bw >> 1) : bw;
+    settings.frequencyChangeStep = GetBW() >> 1;
     RelaunchScan();
     ResetBlacklist();
     redrawScreen = true;
@@ -1503,10 +1370,9 @@ static void UpdateFreqInput(KEY_Code_t key)
     redrawScreen = true;
 }
 
-#if ENABLE_SPECTRUM_BLACKLIST
 static void Blacklist()
 {
-#ifdef ENABLE_SCAN_RANGES
+#if defined(ENABLE_SCAN_RANGES) || ENABLE_SPECTRUM_BLACKLIST
     blacklistFreqs[blacklistFreqsIdx++ % ARRAY_SIZE(blacklistFreqs)] = peak.i;
 #endif
 
@@ -1515,9 +1381,8 @@ static void Blacklist()
     ToggleRX(false);
     ResetScanStats();
 }
-#endif // ENABLE_SPECTRUM_BLACKLIST
 
-#ifdef ENABLE_SCAN_RANGES
+#if defined(ENABLE_SCAN_RANGES) || ENABLE_SPECTRUM_BLACKLIST
 static bool IsBlacklisted(uint16_t idx)
 {
     if (blacklistFreqsIdx)
@@ -1550,10 +1415,8 @@ static bool IsRssiHistoryInvalid(uint16_t rssi)
 }
 
 // applied x2 to prevent initial rounding.
-#if ENABLE_RSSI_SQRT
 // A mild square-root compression (sugar map) is applied so that weak signals
 // occupy more of the display height while strong peaks are not clipped.
-#endif
 uint8_t Rssi2PX(uint16_t rssi, uint8_t pxMin, uint8_t pxMax)
 {
     const int DB_MIN = settings.dbMin << 1;
@@ -1655,10 +1518,9 @@ Start:
         goto Back;
 }
 
-// Draw the spectrum curve (solid crest + optional checkerboard body) and, when
-// peak hold is enabled, the dotted peak hold trace.  Both use the same
-// half-step bridging so the peak hold crest shape mirrors the live crest
-// exactly, just rendered with a dotted pattern.
+// Draw the spectrum curve (solid crest + checkerboard body) and the peak hold
+// dotted trace.  Both use the same half-step bridging so the peak hold crest
+// shape mirrors the live crest exactly, just rendered with a dotted pattern.
 static void DrawSpectrumCurve(const uint8_t *topY)
 {
 #if ENABLE_PEAK_HOLD
@@ -1704,12 +1566,12 @@ static void DrawSpectrumCurve(const uint8_t *topY)
             for (uint8_t y = crestTop; y <= crestBot; y++)
                 PutPixel(x, y, true);
 
-#if ENABLE_SPECTRUM_SHADE
             // Checkerboard body below the crest.
+#if ENABLE_SPECTRUM_SHADE
             for (uint8_t y = crestBot + 1; y <= DrawingEndY; y++)
                 if (((x + y) & 1) == 0)
                     PutPixel(x, y, true);
-#endif // ENABLE_SPECTRUM_SHADE
+#endif
         }
 
 #if ENABLE_PEAK_HOLD
@@ -1798,7 +1660,7 @@ static void BuildCurrentSpectrumTopY(uint8_t *topY)
     BuildSpectrumTopY(topY, bars);
 #if ENABLE_SPECTRUM_SMOOTHING
     // Skip cosmetic smoothing in manual mode so the rendered curve matches
-    // the raw RSSI used by the squelch detector � narrow peaks must visibly
+    // the raw RSSI used by the squelch detector — narrow peaks must visibly
     // cross the trigger line when the radio opens the squelch.
     if (!manualSetFlag)
         SmoothTopY(topY);
@@ -1813,12 +1675,12 @@ static void DrawStatus()
         char trigStr[6];
 
         if (IsRssiHistoryInvalid(scanInfo.rssi))
-            strcpy(curStr, "--");
+            sprintf(curStr, "--");
         else
             sprintf(curStr, "%d", Rssi2DBm(scanInfo.rssi));
 
         if (monitorMode || settings.rssiTriggerLevel == RSSI_MAX_VALUE)
-            strcpy(trigStr, "--");
+            sprintf(trigStr, "--");
         else
             sprintf(trigStr, "%d", Rssi2DBm(settings.rssiTriggerLevel));
 
@@ -1827,21 +1689,8 @@ static void DrawStatus()
     else
     {
         // In AUTO, keep mode/profile display only (no current/trigger pair).
-        // While a listen window is open, append the live RSSI so an operator can
-        // tell "nothing on this frequency" apart from "signal present but no
-        // audio" without a scope.  scanInfo.rssi is already refreshed inside the
-        // listen burst, so this costs no extra SPI traffic.
-        char dBmStr[8];
-        dBmStr[0] = 0;
-        if (isListening && !IsRssiHistoryInvalid(scanInfo.rssi))
-            sprintf(dBmStr, " %d", Rssi2DBm(scanInfo.rssi));
-
-#if ENABLE_SPECTRUM_BIDIR
-        sprintf(String, "A:%s %c%s", autoSensitivityLabel[autoSensitivity],
-                scanForward ? '>' : '<', dBmStr);
-#else
-        sprintf(String, "A:%s%s", autoSensitivityLabel[autoSensitivity], dBmStr);
-#endif
+        sprintf(String, "A:%s %c", autoSensitivityLabel[autoSensitivity],
+                scanForward ? '>' : '<');
     }
     
     GUI_DisplaySmallest(String, 0, 1, true, true);
@@ -1925,14 +1774,8 @@ static void DrawF(uint32_t f)
     // Left-aligned (End == Start = 43) so it does not collide with BW at x=108.
     UI_PrintStringSmallNormal(String, 43, 43, 0);
 
-    // sprintf("%3s") equivalent without the printf machinery: the smallest
-    // font advances 4 px per glyph, so right-justify in a 3-char field by
-    // shifting the start x instead of padding the buffer with spaces.
-    const char *mod = gModulationStr[settings.modulationType];
-    uint8_t pad = 3 - strlen(mod);
-    if (pad > 3) // strlen(mod) > 3 can't happen ([4]-byte rows); wrap guard
-        pad = 0;
-    GUI_DisplaySmallest(mod, 116 + pad * 4, 1, false, true);
+    sprintf(String, "%3s", gModulationStr[settings.modulationType]);
+    GUI_DisplaySmallest(String, 116, 1, false, true);
     sprintf(String, "%4sk", bwOptions[settings.listenBw]);
     GUI_DisplaySmallest(String, 108, 7, false, true);
 
@@ -2011,11 +1854,7 @@ static bool SpectrumColumnAtOrAboveY(const uint8_t *topY, uint8_t x, uint8_t y)
 
 static uint8_t GetScanStepTextWidth()
 {
-    // Digit count of GetScanStep()/100 (always 0..100) without pulling in
-    // sprintf just to measure a string length.
-    uint16_t v = GetScanStep() / 100;
-    uint8_t digits = (v >= 100) ? 3 : (v >= 10) ? 2 : 1;
-    return (digits + 4) * 4; // "%u.%02uk", 4 px advance per char
+    return (sprintf(NULL, "%u", GetScanStep() / 100) + 4) * 4; // "%u.%02uk", 4 px advance per char
 }
 
 static uint8_t GetBwTextWidth()
@@ -2081,7 +1920,7 @@ static void DrawArrow(uint8_t x)
         signed v = x + i;
         if (!(v & 128))
         {
-            gFrameBuffer[5][v] |= (0b01111000 << abs_int16(i)) & 0b01111000;
+            gFrameBuffer[5][v] |= (0b01111000 << my_abs(i)) & 0b01111000;
         }
     }
 }
@@ -2150,9 +1989,7 @@ static void OnKeyDown(uint8_t key) {
 #endif
         break;
     case KEY_SIDE1:
-#if ENABLE_SPECTRUM_BLACKLIST
         Blacklist();
-#endif
         break;
     case KEY_5:
 #ifdef ENABLE_SCAN_RANGES
@@ -2169,7 +2006,6 @@ static void OnKeyDown(uint8_t key) {
     case KEY_PTT:
         SetState(STILL);
         TuneToPeak();
-        FineTuneToPeak();
         break;
     case KEY_MENU:
         // Short press toggles manual/auto.
@@ -2255,12 +2091,12 @@ static void OnKeyDownStill(KEY_Code_t key) {
     case KEY_SIDE1:
         monitorMode = !monitorMode;
         break;
-#if ENABLE_SPECTRUM_REG_MENU
     case KEY_MENU:
+#if ENABLE_SPECTRUM_REG_MENU
         menuState = (menuState == ARRAY_SIZE(registerSpecs) - 1) ? 1 : menuState + 1;
         redrawScreen = true;
-        break;
 #endif
+        break;
     case KEY_EXIT:
 #if ENABLE_SPECTRUM_REG_MENU
         if (!menuState)
@@ -2370,13 +2206,31 @@ static void RenderStill()
                 gFrameBuffer[row + 1][j + offset] = 0xFF;
             }
         }
-        // GUI_DisplaySmallest() takes a const char *, so the sprintf("%s")
-        // round-trip through String[] was pure overhead.
-        GUI_DisplaySmallest(registerSpecs[idx].name, offset + 2, row * 8 + 2, false,
+        sprintf(String, "%s", registerSpecs[idx].name);
+        GUI_DisplaySmallest(String, offset + 2, row * 8 + 2, false,
                             menuState != idx);
 
 #ifdef ENABLE_FEAT_F4HWN_SPECTRUM
         sprintf(String, "%ddB", regOptions[idx].options[GetRegMenuValue(idx)]);
+
+        /*
+        if(idx == 1)
+        {
+            sprintf(String, "%ddB", LNAsOptions[GetRegMenuValue(idx)]);
+        }
+        else if(idx == 2)
+        {
+            sprintf(String, "%ddB", LNAOptions[GetRegMenuValue(idx)]);
+        }
+        else if(idx == 3)
+        {
+            sprintf(String, "%ddB", VGAOptions[GetRegMenuValue(idx)]);
+        }
+        else if(idx == 4)
+        {
+            sprintf(String, "%skHz", BPFOptions[(GetRegMenuValue(idx) / 0x2aaa)]);
+        }
+        */
 #else
         sprintf(String, "%u", GetRegMenuValue(idx));
 #endif
@@ -2403,12 +2257,14 @@ static void Render()
         break;
     }
 
-    // Display blit is done incrementally (one page per tick) � see Tick().
+    // Display blit is done incrementally (one page per tick) — see Tick().
 }
 
 static bool HandleUserInput()
 {
     kbd.prev = kbd.current;
+    // UV-K1 calls KEYBOARD_GetKey() here; this tree's driver exposes the same
+    // non-blocking read as KEYBOARD_Poll() (returns KEY_INVALID when idle).
     kbd.current = KEYBOARD_Poll();
 
     if (kbd.current != KEY_INVALID && kbd.current == kbd.prev)
@@ -2480,7 +2336,7 @@ static void Scan()
     uint8_t slot = GetHistorySlot(scanInfo.i);
 
     if (rssiHistory[slot] != RSSI_MAX_VALUE
-#ifdef ENABLE_SCAN_RANGES
+#if defined(ENABLE_SCAN_RANGES) || ENABLE_SPECTRUM_BLACKLIST
         && !IsBlacklisted(scanInfo.i)
 #endif
     )
@@ -2494,7 +2350,6 @@ static void Scan()
 static void NextScanStep()
 {
     ++peak.t;
-#if ENABLE_SPECTRUM_BIDIR
     if (scanForward) {
         ++scanInfo.i;
         scanInfo.f += scanInfo.scanStep;
@@ -2502,10 +2357,6 @@ static void NextScanStep()
         --scanInfo.i;
         scanInfo.f -= scanInfo.scanStep;
     }
-#else
-    ++scanInfo.i;
-    scanInfo.f += scanInfo.scanStep;
-#endif
 }
 
 #if SPECTRUM_INTERLACE_LARGE_SWEEPS
@@ -2562,8 +2413,8 @@ static void FinalizeCompletedSweep()
         settings.dbMax = newMax;
     }
 
-#if ENABLE_SPECTRUM_BIDIR
     // Next full sweep starts from the opposite side to avoid directional bias.
+#if ENABLE_SPECTRUM_BIDIR
     scanStartFromLeft = !scanStartFromLeft;
 #endif
     newScanStart = true;
@@ -2572,25 +2423,6 @@ static void FinalizeCompletedSweep()
 static void UpdateScan()
 {
     Scan();
-
-    // P2: early open mid-sweep.  Previously RX could only open at the sweep
-    // end, so a strong carrier at step 5 of 64 still waited out the rest of
-    // the sweep (~45 ms, more at 128 steps / narrow step).  Test the sweep
-    // max so far with the same threshold the end-of-sweep logic uses: same
-    // false-open rate, just up to one full sweep earlier.
-    // AutoTriggerLevel() is deliberately NOT run here (noise floor needs the
-    // full-sweep min); it still runs at sweep end via UpdatePeakInfoForce().
-    if (!isListening && scanInfo.rssiMax != 0 &&
-        IsRssiOverOpenLevel(scanInfo.rssiMax))
-    {
-        peak.t    = 0;
-        peak.rssi = scanInfo.rssiMax;
-        peak.f    = scanInfo.fPeak;
-        peak.i    = scanInfo.iPeak;
-        ToggleRX(true);
-        TuneToPeak();
-        return;
-    }
 
 #if SPECTRUM_INTERLACE_LARGE_SWEEPS
     if (UseInterlacedSweep())
@@ -2609,7 +2441,8 @@ static void UpdateScan()
         UpdatePeakInfo();
         if (IsPeakOverOpenLevel())
         {
-            OpenOnPeak();
+            ToggleRX(true);
+            TuneToPeak();
             return;
         }
 
@@ -2622,12 +2455,8 @@ static void UpdateScan()
     }
 #endif
 
-#if ENABLE_SPECTRUM_BIDIR
     bool atEnd = scanForward ? (scanInfo.i >= scanInfo.measurementsCount - 1)
                              : (scanInfo.i <= 1);
-#else
-    bool atEnd = (scanInfo.i >= scanInfo.measurementsCount - 1);
-#endif
 
     if (!atEnd)
     {
@@ -2641,7 +2470,8 @@ static void UpdateScan()
     UpdatePeakInfo();
     if (IsPeakOverOpenLevel())
     {
-        OpenOnPeak();
+        ToggleRX(true);
+        TuneToPeak();
         return;
     }
 
@@ -2667,7 +2497,7 @@ static void UpdateStill()
     preventKeypress = false;
 
     peak.rssi = scanInfo.rssi;
-    // EMA a=0.25 for display only; seed on first sample
+    // EMA α=0.25 for display only; seed on first sample
     rssiSmoothed = rssiSmoothed ? (rssiSmoothed * 3 + scanInfo.rssi) >> 2
                                 : scanInfo.rssi;
     AutoTriggerLevel();
@@ -2681,9 +2511,7 @@ static void UpdateListening()
 {
     preventKeypress = false;
 
-    // listenT counts down with 1ms delay per tick � no SPI during this phase.
-    // Audio simply plays from the AF route armed by ToggleRX(true); nothing
-    // extra is polled here so the SPI bus stays quiet while listening.
+    // listenT counts down with 1ms delay per tick — no SPI during this phase.
     if (listenT)
     {
         listenT--;
@@ -2692,8 +2520,8 @@ static void UpdateListening()
     }
 
     // --- Single SPI burst: all BK4819 accesses happen here, once per
-    // listenT expiry.  SPI repeats at a few Hz � below the audible range.
-    // Between bursts the bus is completely silent.
+    // listenT expiry (every 320 ms).  SPI repeats at ~3 Hz — below the
+    // audible range.  Between bursts the bus is completely silent.
 
 #ifdef ENABLE_FEAT_F4HWN_SPECTRUM
     bool tailFound = checkIfTailFound();
@@ -2731,13 +2559,6 @@ static void UpdateListening()
 #endif
         Measure();
     }
-
-    // A beep or tone that fires during the window (e.g. the low-battery warning
-    // is exempt from AUDIO_Beep()'s "quiet while receiving" guard) latches
-    // REG_47 to BK4819_AF_MUTE.  Repair the AF route inside this same SPI burst
-    // instead of leaving the rest of the window silent.
-    if (isListening)
-        EnsureListenAudio();
 
     peak.rssi = scanInfo.rssi;
     rssiSmoothed = rssiSmoothed ? (rssiSmoothed * 3 + scanInfo.rssi) >> 2
@@ -2781,8 +2602,7 @@ static void UpdateListening()
 
     if (keepListening)
     {
-        // P1: re-arm window while the signal is present.
-        listenT = LISTEN_REARM_TICKS;
+        listenT = 320;
         return;
     }
 
@@ -2805,15 +2625,20 @@ static void Tick()
     if (gNextTimeslice)
     {
         gNextTimeslice = false;
-        // BACKLIGHT_Update(); // TODO: not implemented
-        (void)0; // placeholder
     }
 
-#ifdef ENABLE_SCAN_RANGES
+    // The UV-K1 tick calls BACKLIGHT_Update() because its driver owns the
+    // backlight countdown.  This tree advances gBacklightCountdown_500ms from
+    // app/app.c's 500 ms timeslice, which does not run while the spectrum loop
+    // owns the CPU, so run the very same countdown here.
     if (gNextTimeslice_500ms)
     {
         gNextTimeslice_500ms = false;
 
+        if (gBacklightCountdown_500ms > 0 && --gBacklightCountdown_500ms == 0)
+            BACKLIGHT_TurnOff();
+
+#ifdef ENABLE_SCAN_RANGES
         // For large scans (>128 steps), refresh display periodically but
         // wait for the full sweep to complete before triggering listen mode.
         // This avoids showing stale rssiHistory data from a previous sweep.
@@ -2822,8 +2647,8 @@ static void Tick()
             redrawScreen = true;
             preventKeypress = false;
         }
-    }
 #endif
+    }
 
     if (!preventKeypress)
     {
@@ -2916,9 +2741,7 @@ void APP_RunSpectrum()
 
     isListening = true; // to turn off RX later
     newScanStart = true;
-#if ENABLE_SPECTRUM_BIDIR
     scanStartFromLeft = true;
-#endif
 
     ToggleRX(true), ToggleRX(false); // hack to prevent noise when squelch off
     RADIO_SetModulation(settings.modulationType = gTxVfo->Modulation);
@@ -2932,9 +2755,8 @@ void APP_RunSpectrum()
     // Reset dynamic spectrum state on every entry.
     // Persisted settings are step/count/listenBW only; trigger and dB window
     // are runtime values and should not carry over between sessions.
-    manualSetFlag = false;
-    settings.rssiTriggerLevel = RSSI_MAX_VALUE;
-    autoNoiseFloor = RSSI_MAX_VALUE;
+    // manualSetFlag = false;
+    // settings.rssiTriggerLevel = RSSI_MAX_VALUE;
 
     RearmRuntimeState();
 
@@ -2943,6 +2765,8 @@ void APP_RunSpectrum()
     while (isInitialized)
     {
 #if defined(ENABLE_UART) || defined(ENABLE_USB)
+        // UV-K1 calls UART_ServiceCommands(); this tree splits that into the
+        // availability check and the handler (same pattern the old spectrum used).
         if (UART_IsCommandAvailable())
         {
             UART_HandleCommand();

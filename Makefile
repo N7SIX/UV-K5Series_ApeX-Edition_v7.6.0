@@ -58,17 +58,36 @@ ENABLE_SPECTRUM_RSSI_SQRT       ?= 0
 ENABLE_SPECTRUM_REG_MENU        ?= 0
 # Bidirectional sweep (alternating start side; saves ~400 bytes when disabled)
 ENABLE_SPECTRUM_BIDIR           ?= 0
+# UV-K1 (K1-lineage) spectrum extras: LNA/PGA/VGA register menu with dB readout,
+# channel name in the status bar, RF tail detect, and persistent spectrum
+# settings in the spare PY25Q16 flash.  Requires ENABLE_SPECTRUM=1.
+ENABLE_SPECTRUM_K1_EXTRAS       ?= 0
 
 #############################################################
 # ---- FLASH BUDGET ----
-# UV-K5 flasher limit is 61439 B (0xEFFF); the bootloader owns 0xF000+.
-# Measured clean-build FLASH saved when a toggle is set to 0, with the rest of the
-# default config unchanged (-Oz + single-partition LTO + --gc-sections).
-# Costs are additive to within a few bytes:
+# True flashable budget: 61440 B (0x0000-0xEFFF).  The bootloader owns
+# 0xF000-0xFFFF, so the raw .bin image (text+data) must stay <= 61440 B.
+# The `all:` report below measures text+data AND the real .bin size and
+# warns when the image exceeds 61440 B.
+#
+# Measured clean-build FLASH cost when a toggle is set to 1, with the rest of
+# the default config unchanged (-Oz + single-partition LTO + --gc-sections).
+# Costs are additive to within a few bytes.  Post UV-K1-spectrum adoption
+# (v7.6.10 audit, arm-gnu 14.3 toolchain), spectrum toggles (default off
+# unless noted):
+#   ENABLE_SPECTRUM_SHADE     +32   (default ON)
+#   ENABLE_SPECTRUM_RSSI_SQRT +48
+#   ENABLE_SPECTRUM_BIDIR    +184   (bidirectional sweep)
+#   ENABLE_SPECTRUM_BLACKLIST+528   (needs ENABLE_SCAN_RANGES semantics)
+#   PEAK_HOLD+SMOOTH together+100  (bss +192)
+#   ENABLE_SPECTRUM_K1_EXTRAS+428   (LNA/PGA/VGA reg menu + persistence;
+#                    persistence calls the PY25Q16 stub on UV-K5/K6 hardware)
+#   ENABLE_SPECTRUM_REG_MENU +712
+# Tree-level toggles (cost of turning OFF, i.e. flash saved):
 #   ENABLE_RSSI_BAR   -580                ENABLE_AUDIO_BAR  -560
-#   ENABLE_BIG_FREQ    -92                ENABLE_FLASHLIGHT  -80
-#   ENABLE_SMALL_BOLD  ~60 (nearly free now: the dedicated 564 B bold font table was
-#                           removed and bold is synthesised from gFontSmall in ui/helper.c)
+#   ENABLE_BIG_FREQ    -92                ENABLE_FLASHLIGHT  -76
+#   ENABLE_SMALL_BOLD  -100 (the dedicated 564 B bold font table was removed
+#                           and bold is synthesised from gFontSmall in ui/helper.c)
 #   ENABLE_CUSTOM_MENU_LAYOUT: ON is 88 B SMALLER
 # Size-tuned flags already in use: -Oz, -ffunction-sections/-fdata-sections +
 # --gc-sections, single-partition LTO, -fmerge-all-constants, -fno-ipa-cp-clone,
@@ -76,9 +95,11 @@ ENABLE_SPECTRUM_BIDIR           ?= 0
 # -Wl,-O2, -falign-functions/jumps/loops/labels=1 and -fno-unwind-tables all measured
 # exactly 0 B, and -fno-ipa-cp / -fno-jump-tables made the image LARGER.
 #
-# Default configuration (SMALL_BOLD + AUDIO_BAR + RSSI_BAR all ON):
-#   FLASH 61388 B of the 61439 B limit  ->  +51 B margin
-# (measured with the local arm-none-eabi 14.3 toolchain).  Turn a toggle off only if a
+# Default configuration (UV-K1 spectrum core + SHADE, BIDIR/BLACKLIST/
+# REG_MENU/K1_EXTRAS/PEAK/SMOOTH off, SMALL_BOLD + AUDIO_BAR + RSSI_BAR on):
+#   image 61396 B of the 61440 B limit  ->  +44 B margin
+#   packed (fw-pack: image + 16-byte version block @0x2000 +2) = 61414 B
+# (see Documentation/FLASH_AUDIT_K1.md).  Turn a toggle off only if a
 # new feature needs the headroom.
 #
 # !! DO NOT put an inline "# comment" after a value with whitespace before the '#' !!
@@ -445,6 +466,11 @@ ifeq ($(ENABLE_SPECTRUM_BIDIR),1)
 else
 	CFLAGS += -DENABLE_SPECTRUM_BIDIR=0
 endif
+ifeq ($(ENABLE_SPECTRUM_K1_EXTRAS),1)
+	CFLAGS += -DENABLE_SPECTRUM_K1_EXTRAS=1
+else
+	CFLAGS += -DENABLE_SPECTRUM_K1_EXTRAS=0
+endif
 ifeq ($(ENABLE_SWD),1)
 	CFLAGS += -DENABLE_SWD
 endif
@@ -740,20 +766,22 @@ all: $(TARGET)
 	$(OBJCOPY) -O binary build/ApeX/n7six.ApeX.$(VERSION_STRING).elf build/ApeX/n7six.ApeX-k5.$(VERSION_STRING).bin
 	@echo "[Linking C executable n7six.ApeX.$(VERSION_STRING).elf]"
 	@echo "Memory Region      Used Size  Region Size   % Used  "
-	@bash -c 'FLASH_USED=$$(arm-none-eabi-size build/ApeX/n7six.ApeX.$(VERSION_STRING).elf | awk "NR==2 {print \$$1}") ; \
+	@bash -c 'FLASH_USED=$$(arm-none-eabi-size build/ApeX/n7six.ApeX.$(VERSION_STRING).elf | awk "NR==2 {print \$$1+\$$2}") ; \
 RAM_USED=$$(arm-none-eabi-size build/ApeX/n7six.ApeX.$(VERSION_STRING).elf | awk "NR==2 {print \$$2+\$$3}") ; \
-FLASH_LIMIT=65536 ; RAM_LIMIT=8192 ; \
+IMG_SIZE=$$(stat -c%s build/ApeX/n7six.ApeX-k5.$(VERSION_STRING).bin) ; \
+FLASH_LIMIT=61440 ; RAM_LIMIT=8192 ; \
 FLASH_PCT=$$(awk "BEGIN {printf \"%.2f\", ($$FLASH_USED/$$FLASH_LIMIT)*100}") ; \
 RAM_PCT=$$(awk "BEGIN {printf \"%.2f\", ($$RAM_USED/$$RAM_LIMIT)*100}") ; \
 printf "%-15s %10s %12s %10s\n" "FLASH" "$$FLASH_USED" "$$FLASH_LIMIT" "$$FLASH_PCT%"; \
 printf "%-15s %10s %12s %10s\n" "RAM" "$$RAM_USED" "$$RAM_LIMIT" "$$RAM_PCT%"; \
-	FLASH_FLASHABLE=61439 ; \
-	if [ "$$FLASH_USED" -gt "$$FLASH_FLASHABLE" ]; then \
+	printf "%-15s %10s\\n" "image (.bin)" "$$IMG_SIZE" ; \
+FLASH_FLASHABLE=61440 ; \
+	if [ "$$IMG_SIZE" -gt "$$FLASH_FLASHABLE" ]; then \
 		echo "" ; \
-		echo "  !! WARNING: FLASH usage $$FLASH_USED B exceeds the FLASHABLE limit $$FLASH_FLASHABLE B (0xEFFF)." ; \
+		echo "  !! WARNING: FLASH image $$IMG_SIZE B exceeds the FLASHABLE limit $$FLASH_FLASHABLE B (0xEFFF)." ; \
 		echo "     The UV-K5/K6 bootloader owns 0xF000-0xFFFF, so UVTools (legacy engine) rejects" ; \
-		echo "     application images larger than 0xEFFF.  Image is over by $$((FLASH_USED - FLASH_FLASHABLE)) B." ; \
-		echo "     Disable optional features or shrink code until FLASH <= $$FLASH_FLASHABLE B." ; \
+		echo "     application images larger than 0xEFFF.  Image is over by $$((IMG_SIZE - FLASH_FLASHABLE)) B." ; \
+		echo "     Disable optional features or shrink code until the image <= $$FLASH_FLASHABLE B." ; \
 		echo "" ; \
 	fi ; \
 echo "Done: ApeX Edition, Successful!"'
