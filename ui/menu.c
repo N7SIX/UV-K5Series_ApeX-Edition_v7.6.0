@@ -1567,6 +1567,14 @@ void UI_DisplayMenu(void)
 
         case MENU_BATCAL:
         {
+            // shared voltage reference labels (deduplicated to save FLASH)
+            static const char V_LO[] = "6.00V";
+            static const char V_HI[] = "8.40V";
+
+            // low calibration point value/preset, shared by the stages below
+            const uint16_t loPreset = MENU_BatCalLowPreset();
+            const uint16_t loVal    = (gBatteryCalibration[0] > 0) ? gBatteryCalibration[0] : loPreset;
+
             if (!gIsInSubMenu)
             {   // menu-list preview: live calibrated voltage and high-point value
                 sprintf(String, "%u.%02uV\n%u", gBatteryVoltageAverage / 100,
@@ -1576,44 +1584,40 @@ void UI_DisplayMenu(void)
 
             if (gBatCalStage == 0)
             {   // Pick the reference point to edit.
-                const uint16_t loVal     = (gBatteryCalibration[0] > 0) ? gBatteryCalibration[0] : MENU_BatCalLowPreset();
-                const bool     loFactory = (loVal == MENU_BatCalLowPreset());
-                sprintf(String, "%cHI 8.40V", gSubMenuSelection == 0 ? '>' : ' ');
+                sprintf(String, "%cHI %s", gSubMenuSelection == 0 ? '>' : ' ', V_HI);
                 UI_PrintStringSmallBold(String, menu_item_x1, 0, 1);
                 sprintf(String, " %4u", gBatteryCalibration[3]);
                 UI_PrintStringSmallNormal(String, menu_item_x1, 0, 2);
-                sprintf(String, "%cLOW 6.00V", gSubMenuSelection == 1 ? '>' : ' ');
+                sprintf(String, "%cLOW %s", gSubMenuSelection == 1 ? '>' : ' ', V_LO);
                 UI_PrintStringSmallBold(String, menu_item_x1, 0, 4);
-                sprintf(String, " %4u %s", loVal, loFactory ? "AUTO" : "CUST");
+                sprintf(String, " %4u %s", loVal, (loVal == loPreset) ? "AUTO" : "CUST");
                 UI_PrintStringSmallNormal(String, menu_item_x1, 0, 5);
                 already_printed = true;
                 break;
             }
             if (gBatCalStage == 1)
             {   // Choose the automatic preset or custom low-point value.
-                const uint16_t loVal = (gBatteryCalibration[0] > 0)
-                                      ? gBatteryCalibration[0]
-                                      : MENU_BatCalLowPreset();
                 sprintf(String, "%cAUTO-CAL", gSubMenuSelection == 0 ? '>' : ' ');
                 UI_PrintStringSmallBold(String, menu_item_x1, 0, 1);
-                sprintf(String, "6.00V %u", loVal);
-                UI_PrintStringSmallNormal(String, menu_item_x1, 0, 2);
                 sprintf(String, "%cCUSTOM", gSubMenuSelection == 1 ? '>' : ' ');
                 UI_PrintStringSmallBold(String, menu_item_x1, 0, 4);
-                sprintf(String, "6.00V %u", loVal);
+                sprintf(String, "%s %u", V_LO, loVal);   // same value under both options
+                UI_PrintStringSmallNormal(String, menu_item_x1, 0, 2);
                 UI_PrintStringSmallNormal(String, menu_item_x1, 0, 5);
                 already_printed = true;
                 break;
             }
             // Stage 2: numeric value editing
             {
-                // REF is 8.40V - the fixed Li-Ion full charge calibration target
+                // REF is the calibration target voltage of the point being
+                // edited: 6.00V for the LOW point, 8.40V for the HI (full
+                // charge) point.
                 // LIVE shows the ACTUAL current battery voltage (dynamic from hardware ADC)
-                // SET is the ADC value the user is dialing in for the HI calibration point
+                // SET is the ADC value the user is dialing in for the selected calibration point
                 // This allows the user to verify the battery is at the reference voltage
                 // while dialing in the corresponding ADC value
-                const char *reference = "REF  8.40V";
-                uint16_t live_voltage = gBatteryVoltageAverage;  // Actual dynamic battery voltage from hardware
+                const char   *reference    = (gBatCalTarget == 0) ? V_LO : V_HI;
+                const uint16_t live_voltage = gBatteryVoltageAverage;  // Actual dynamic battery voltage from hardware
                 char setText[6];
 
                 if (gInputBoxIndex > 0)
@@ -1631,7 +1635,8 @@ void UI_DisplayMenu(void)
                 UI_PrintStringSmallBold(String, menu_item_x1, 0, 2);
                 sprintf(String, "SET  %s", setText);
                 UI_PrintStringSmallNormal(String, menu_item_x1, 0, 4);
-                UI_PrintStringSmallNormal(reference, menu_item_x1, 0, 5);
+                sprintf(String, "REF  %s", reference);
+                UI_PrintStringSmallNormal(String, menu_item_x1, 0, 5);
             }
             already_printed = true;
             break;

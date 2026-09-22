@@ -173,18 +173,6 @@ void Main(void)
         #ifdef ENABLE_FEAT_N7SIX
             gEeprom.KEY_LOCK = 0;
             SETTINGS_SaveSettings();
-            #ifndef ENABLE_VOX
-                gMenuCursor = 67; // move to hidden section, fix me if change... !!! Remove VOX and Mic Bar
-            #else
-                gMenuCursor = 68; // move to hidden section, fix me if change... !!!
-            #endif
-
-            #ifdef ENABLE_NOAA
-                gMenuCursor += 1; // move to hidden section, fix me if change... !!!
-            #endif
-            #ifdef ENABLE_FEAT_N7SIX_RESCUE_OPS
-                gMenuCursor += 1; // move to hidden section, fix me if change... !!!
-            #endif
             gSubMenuSelection = gSetting_F_LOCK;
         #endif
     }
@@ -192,8 +180,21 @@ void Main(void)
     // count the number of menu items
     gMenuListCount = 0;
     while (MenuList[gMenuListCount].name[0] != '\0') {
-        if(!gF_LOCK && MenuList[gMenuListCount].menu_id == FIRST_HIDDEN_MENU_ITEM)
-            break;
+        if (MenuList[gMenuListCount].menu_id == FIRST_HIDDEN_MENU_ITEM)
+        {
+            #ifdef ENABLE_FEAT_N7SIX
+                // remember where the hidden section starts ("F Lock")
+                // NOTE: the index MUST NOT be hardcoded - it shifts whenever
+                // items are added/removed to/from MenuList (the old hardcoded
+                // 67 landed past the last hidden item and drew a blank menu
+                // until the user pressed an arrow key)
+                if (gF_LOCK)
+                    gMenuCursor = gMenuListCount;
+            #endif
+
+            if (!gF_LOCK)
+                break;  // visible-only menu list ends at the first hidden item
+        }
 
         gMenuListCount++;
     }
