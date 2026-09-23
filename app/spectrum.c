@@ -1007,8 +1007,10 @@ static void RequestAutoTriggerRecalibration()
 
 static void RearmRuntimeState()
 {
-    settings.dbMin = -128;
-    settings.dbMax = -97;
+    // Wide dB range (80 dB) so the spectrum view shows noise floor at bottom
+    // and strong signals near the top — same as the struct defaults.
+    settings.dbMin = -130;
+    settings.dbMax = -50;
     memset(rssiHistory, 0, sizeof(rssiHistory));
 #if ENABLE_PEAK_HOLD
     memset(peakHoldY,   PEAK_HOLD_INIT, sizeof(peakHoldY));
@@ -2759,10 +2761,6 @@ void APP_RunSpectrum()
     // settings.rssiTriggerLevel = RSSI_MAX_VALUE;
 
     RearmRuntimeState();
-
-    // Clear stale RSSI history so the first render shows a clean waveform
-    // at the bottom (quiet noise floor) rather than high trace from previous session.
-    memset(rssiHistory, 0, sizeof(rssiHistory));
 
     isInitialized = true;
 
