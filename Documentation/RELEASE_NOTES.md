@@ -1,57 +1,59 @@
-# UV-K5/K5(8)/K6 SERIES APEX EDITION — v7.6.6 Release & Audit Summary (April 18, 2026)
+# UV-K5/K5(8)/K6 SERIES APEX EDITION
 
-**Firmware Version:** v7.6.6 (ApeX Edition)
-**Release Date:** April 18, 2026
-**Status:** All critical and high-priority issues resolved, codebase fully audited and reorganized.
+## UV-K5/K5(8)/K6 SERIES APEX EDITION — v7.6.10A Release Notes
 
-#### Key Updates:
-- **FLASH Size Overflow Fix (September 2026):**
-  - The default build no longer fit: the image was 62,104 B against the UV-K5 flasher limit of 61,439 B (0xEFFF), 665 B over
-  - `ENABLE_SMALL_BOLD` and `ENABLE_AUDIO_BAR` now default to `0` (measured savings of 596 B and 560 B)
-  - Small text now renders with `gFontSmall` instead of `gFontSmallBold`; both fonts use identical 6-byte glyph cells, so character width, height and spacing are unchanged
-  - The TX microphone level bar is dropped; the `MicBar` menu entry remains visible and displays `N/A` (same convention already used for disabled options)
-  - Verified clean build: FLASH 60,892 B (92.91%), RAM 3,352 B — 491 B under the flasher limit, no size warning
-  - Per-toggle FLASH costs and the exhausted compiler/linker flag experiments are documented in the Makefile
-- **Airband Modulation Enforcement Hotfix (May 2026):**
-  - Airband range `108.000-136.999 MHz` is now always clamped to `AM`
-  - Mode changes from menu/shortcut no longer allow `FM`/`USB` to persist on airband
-  - Fixed an invalid airband offset condition that could never trigger due to a duplicated boundary check
-  - Build validated successfully after patch: `./compile-with-docker.sh ApeX`
-- **Critical Security Fixes:**
-  - Buffer overflow in UART (strcpy → strncpy, explicit null-termination)
-  - Interrupt state management (save/restore with __get_PRIMASK)
-  - Frequency input overflow protection (bounds checking)
-  - EEPROM bounds and alignment validation
-- **Performance Improvements:**
-  - Blocking EEPROM writes refactored for async operation
-  - Hardware I2C recommended for 30x speedup
-  - Ring buffer and spectrum caching optimizations
-- **Stability & Reliability:**
-  - All features validated in field and lab
-  - Defensive bounds checking for all display buffers
-  - Persistent spectrum state with EEPROM validation
-- **Documentation:**
-  - All analysis, planning, and implementation guides moved to Documentation/
-  - README, QUICK_REFERENCE, and CRITICAL_FIXES_REPORT updated
-  - All .md and .txt files now follow a unified naming and organization convention
+**Firmware Version:** v7.6.10A (ApeX Edition)  
+**Release Date:** September 23, 2026  
+**Status:** Bug fix release — spectrum analyzer display correction.
 
-#### Implementation Priority:
-- All critical and high-impact issues addressed first (see QUICK_REFERENCE.md for matrix)
-- Remaining medium/low-priority items documented for future releases
+#### Spectrum Analyzer Fix — Trace Display Correction
 
-#### User Impact:
-- Safer, more robust firmware with professional-grade spectrum analyzer
-- Correct airband behavior with deterministic AM selection in the aviation band
-- All documentation up to date and organized for developer reference
+- **Fixed spectrum trace displaying too high on startup (F+5)**
+
+  - **Root Cause:** The `RearmRuntimeState()` function was resetting the display dB range to a narrow 31dB window (`dbMin=-128`, `dbMax=-97`) on every spectrum entry, instead of using the intended 80dB range.
+
+  - **Impact:** With the compressed 31dB range, the noise floor (~-120 dBm) was mapped to the middle of the display (Y≈24-34), causing all traces to appear unnaturally high regardless of actual signal strength.
+
+  - **Fix:** Restored the proper 80dB dynamic range (`dbMin=-130`, `dbMax=-50`) in `RearmRuntimeState()` to match the `SpectrumSettings` struct defaults, ensuring weak signals appear at the bottom and only strong signals near the top.
+
+  - **Affected Files:**
+    - `app/spectrum.c` — `RearmRuntimeState()` function (lines 1010-1013)
+
+  - **Before:** Trace appeared at Y=15-35 (upper-mid screen) on every spectrum startup
+  - **After:** Noise floor correctly displays at Y=36-38 (bottom), strong signals at Y=8-15 (upper area)
+
+#### Version Bump
+
+- **Firmware version updated from v7.6.10 to v7.6.10A**
+
+  - **Changed Files:**
+    - `Makefile` — `VERSION_STRING_2` default updated (this is what the build actually reads; the packed image is now named `n7six.ApeX-k5.v7.6.10A.packed.bin`)
+    - `tools/defines_aapex.txt` — `VERSION_STRING` and `VERSION_STRING_2` updated
+    - `tools/build_k5.ps1` — direct-GCC build defines updated
+
+#### Files Modified
+
+- `app/spectrum.c` — Spectrum analyzer dB range correction
+- `Makefile` — Version string default to v7.6.10A
+- `tools/defines_aapex.txt` — Version string update to v7.6.10A
+- `tools/build_k5.ps1` — Version defines update to v7.6.10A
+
+#### Memory Usage:
+
+```
+Memory Region      Used Size  Region Size   % Used
+FLASH                61376        61440     99.90%
+RAM                   3564         8192     43.51%
+```
+
+*(No change vs v7.6.10 — both builds report FLASH 61376 B (99.90%) and RAM 3564 B (43.51%);*
 
 #### Getting Started:
-- UVTools: https://n7six.github.io/UVTools/
 
-#### Airband Behavior Clarification (May 2026)
-- Airband voice channels are AM by design and are now enforced in firmware for the full airband span.
-- Enforcement is applied during VFO init, EEPROM/VFO reload, and user modulation changes.
-- If tuned inside `108.000-136.999 MHz`, modulation resolves to AM.
- - If tuned outside airband, normal user-selected modulation behavior remains unchanged.
+- UVTools: https://n7six.github.io/UVTools/
+- Compile: `./compile-with-docker.sh ApeX` (Docker) or `win_make.bat` (Windows)
+
+---
 
 # UV-K5/K5(8)/K6 SERIES APEX EDITION — v7.6.10 Release & Audit Summary
 
@@ -70,7 +72,7 @@
   - Calibration is accessible via the battery menu and persists in EEPROM.
 - **Waterfall Disabled (Temporary):**
   - The waterfall implementation has been temporarily disabled to reclaim FLASH space.
-  - FLASH is at 99.74% capacity (61,280 B used of 61,440 B limit) — the waterfall rendering contributed to the overflow.
+  - FLASH is at 99.90% capacity (61,376 B used of 61,440 B limit) — the waterfall rendering contributed to the overflow.
   - The waterfall will be re-enabled once ample FLASH space is reclaimed through further optimization.
   - The spectrum analyzer remains fully functional; only the temporal waterfall display layer is disabled.
 
@@ -88,8 +90,8 @@
 #### Memory Usage:
 ```
 Memory Region      Used Size  Region Size   % Used
-FLASH                61280        61440     99.74%
-RAM                   3372         8192     41.16%
+FLASH                61376        61440     99.90%
+RAM                   3564         8192     43.51%
 ```
 
 #### Getting Started:
