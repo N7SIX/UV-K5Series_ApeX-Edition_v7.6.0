@@ -1899,7 +1899,7 @@ void UI_DisplayMenu(void)
 
     if (is_ctcs || is_dcs) {
         if (gSubMenuSelection == 0) {
-            strcpy(top_right_badge, is_ctcs ? "00/00" : "000/00");
+            strcpy(top_right_badge, is_ctcs ? "00/--" : "000/--");
         } else {
             const uint8_t approved_index = is_ctcs ? 
                 DCS_GetCtcssApprovedIndex(gSubMenuSelection - 1) : 

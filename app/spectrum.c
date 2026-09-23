@@ -2760,6 +2760,10 @@ void APP_RunSpectrum()
 
     RearmRuntimeState();
 
+    // Clear stale RSSI history so the first render shows a clean waveform
+    // at the bottom (quiet noise floor) rather than high trace from previous session.
+    memset(rssiHistory, 0, sizeof(rssiHistory));
+
     isInitialized = true;
 
     while (isInitialized)

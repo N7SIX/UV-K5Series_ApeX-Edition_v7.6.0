@@ -43,9 +43,9 @@ ENABLE_SCAN_RANGES              ?= 0
 ENABLE_WATERFALL                ?= 0
 # Spectrum optimization toggles (disabled by default to reduce FLASH usage)
 # Peak hold trace (saves ~500 bytes when disabled)
-ENABLE_SPECTRUM_PEAK_HOLD       ?= 0
+ENABLE_SPECTRUM_PEAK_HOLD       ?= 1
 # Curve smoothing (saves ~300 bytes when disabled)
-ENABLE_SPECTRUM_SMOOTH          ?= 0
+ENABLE_SPECTRUM_SMOOTH          ?= 1
 # Checkerboard body shade under the spectrum trace (saves FLASH when disabled)
 ENABLE_SPECTRUM_SHADE           ?= 1
 # Interlaced sweeps for >128-step scan ranges
