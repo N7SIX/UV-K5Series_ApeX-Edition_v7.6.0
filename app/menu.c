@@ -547,6 +547,9 @@ void MENU_AcceptSetting(void)
         case MENU_SQL:
             gEeprom.SQUELCH_LEVEL = gSubMenuSelection;
             gVfoConfigureMode     = VFO_CONFIGURE;
+            // RX audit RX-5: refresh both VFOs, otherwise the non-TX VFO keeps
+            // the previous squelch thresholds when dual-watch alternates to it.
+            gFlagResetVfos        = true;
             #ifdef ENABLE_FEAT_N7SIX
                 gSquelchLevelOriginal = 10;
             #endif

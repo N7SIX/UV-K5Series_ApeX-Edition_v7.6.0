@@ -1,5 +1,122 @@
 # UV-K5/K5(8)/K6 SERIES APEX EDITION
 
+## UV-K5/K5(8)/K6 SERIES APEX EDITION — v7.6.10B Release Notes
+
+**Firmware Version:** v7.6.10B (ApeX Edition)  
+**Release Date:** September 24, 2026  
+**Status:** Bug fix release — RX implementation audit fixes for simplex and repeater operation.
+
+#### RX Implementation Fixes (Simplex & Repeater)
+
+Full review of the receive/TX-derivation path in simplex and repeater modes; seven findings fixed.
+Full report: [`RX_SIMPLEX_REPEATER_AUDIT.md`](RX_SIMPLEX_REPEATER_AUDIT.md) (findings RX-1…RX-9;
+§8.7 records the applied changes and the measured FLASH cost).
+
+- **RX-1 — Memory channel could load as AM after listening to the airband**
+
+  - **Root Cause:** the v7.6.6 airband guard in the channel/VFO reload path evaluated the rule against the **previous** RX frequency (`radio/radio.c:267`); the new frequency is only loaded ~100 lines later, so an FM channel selected right after the airband kept `MODULATION_AM`.
+
+  - **Impact:** distorted audio, disabled CTCSS/DCS decoder and **refused PTT** (AM TX is not permitted), and the wrong mode was written to EEPROM by the next channel save.
+
+  - **Fix:** the reload path stores the EEPROM mode value verbatim; the existing post-normalisation guard (`radio/radio.c:408`) applies the airband rule once, with the final clamped frequency. Airband still forces AM (VFO init, channel configuration and the demodulation-cycle action are unchanged).
+
+  - **Affected Files:**
+    - `radio/radio.c` — `RADIO_ConfigureChannel()` modulation handling
+
+- **RX-3 — PTT right after a frequency change could transmit on the previous frequency**
+
+  - **Root Cause:** stepping/entering a VFO frequency retunes RX immediately, but the TX frequency is refreshed only by the deferred save/reconfigure cycle (up to ~500 ms).
+
+  - **Fix:** `RADIO_ApplyOffset(gCurrentVfo)` is re-derived inside `RADIO_PrepareTX()` **before** the band-plan check, so TX always matches the displayed RX frequency + shift; an out-of-band derived split is still refused.
+
+  - **Affected Files:**
+    - `radio/radio.c` — `RADIO_PrepareTX()`
+
+- **RX-2 — Nonsensical offset could wrap the TX frequency (e.g. 42 GHz)**
+
+  - **Root Cause:** `RADIO_ApplyOffset()` used unguarded `uint32_t` arithmetic; an offset larger than the RX frequency wrapped around (145 MHz − 999.999 MHz).
+
+  - **Fix:** an impossible offset now marks the TX frequency invalid (`0xFFFFFFFF`), which `TX_freq_check()` rejects under **every** `F_LOCK_*` mode — the radio beeps "TX disabled" instead of carrying a bogus frequency into the power-calibration band lookup.
+
+  - **Affected Files:**
+    - `radio/radio.c` — `RADIO_ApplyOffset()`
+
+- **RX-4 — Programmed repeater shift was erased by tuning through the airband**
+
+  - **Fix:** the "airband has no shift" rule is applied where the offset is consumed (runtime), instead of clearing the stored `TX_OFFSET_FREQUENCY_DIRECTION` that is serialised to EEPROM. A stored "+600 kHz" (or any split) now survives a tune through 108–137 MHz.
+
+  - **Affected Files:**
+    - `radio/radio.c` — `RADIO_ConfigureChannel()` / `RADIO_ApplyOffset()`
+
+- **RX-5 — Squelch change did not reach the second VFO in dual-watch**
+
+  - **Fix:** `gFlagResetVfos = true;` on both squelch paths (menu `Sql` and F + ▲/▼), so both VFOs get the new thresholds.
+
+  - **Affected Files:**
+    - `app/menu.c` — `MENU_SQL`
+    - `app/main.c` — F + ▲/▼ squelch adjust
+
+- **RX-6 — TX-lock padlock icon used the RX frequency**
+
+  - **Fix:** the icon is now decided by `pTX->Frequency`, so it appears only when TX is really blocked (relevant for cross-band offsets).
+
+  - **Affected Files:**
+    - `ui/main.c` — main-screen status render
+
+- **RX-7 — Repeater tail-tone elimination was not honoured after a TOT**
+
+  - **Fix:** after a timeout-triggered end of transmission, releasing PTT honours `RP STE` (arms the same countdown as a normal release) instead of unmuting immediately, so the repeater tail is suppressed.
+
+  - **Affected Files:**
+    - `app/generic.c` — `GENERIC_Key_PTT()`
+
+#### Verification
+
+- **Functional:** host harness linking the real functions extracted verbatim from `radio/radio.c` — **19/19 checks pass** (RX-1/-2/-3/-4 behaviour incl. ±600 kHz, +5 MHz, simplex and 350EN on/off regression cases); see audit report §8.6/§8.7.
+- **Build:** full build with `-Oz -Wall -Wextra -Werror -std=c2x` + LTO + `--gc-sections` — 0 warnings, 0 errors, in both the release define set and the plain Makefile defaults.
+- **FLASH cost:** **+24 bytes** for the whole patch set (identical in both configurations), `.bss` unchanged → **no RAM cost**.
+- **Bench checks recommended on hardware (Appendix A of the audit report):** airband → memory channel stays FM and can TX; step + immediate PTT transmits on the displayed frequency; a nonsense offset shows "TX disabled"; a stored shift survives an airband round-trip; `Sql` applies to both VFOs; padlock matches real TX capability; TOT + `RP STE` suppresses the repeater tail.
+
+#### Version Bump
+
+- **Firmware version updated from v7.6.10A to v7.6.10B**
+
+  - **Changed Files:**
+    - `Makefile` — `VERSION_STRING_2` default updated (this is what the build actually reads; the packed image is now named `n7six.ApeX-k5.v7.6.10B.packed.bin`)
+    - `tools/defines_aapex.txt` — `VERSION_STRING` and `VERSION_STRING_2` updated
+    - `tools/build_k5.ps1` — direct-GCC build defines updated
+
+#### Files Modified
+
+- `radio/radio.c` — RX-1 (modulation latch), RX-2 (offset guard), RX-3 (TX re-derivation at PTT), RX-4 (airband shift persistence)
+- `app/menu.c`, `app/main.c` — RX-5 (dual-watch squelch refresh)
+- `ui/main.c` — RX-6 (padlock uses the TX frequency)
+- `app/generic.c` — RX-7 (RP-STE after TOT)
+- `Makefile`, `tools/defines_aapex.txt`, `tools/build_k5.ps1` — version bump to v7.6.10B
+- `Documentation/RX_SIMPLEX_REPEATER_AUDIT.md` — new audit report (with implementation status §8.7)
+- `Documentation/AIRBAND_MODULATION_INVESTIGATION.md` — corrected: the reload-path guard it listed as a fix was the RX-1 defect
+- `Documentation/README.md` — documentation index updated
+
+#### Memory Usage:
+
+```
+Memory Region      Used Size  Region Size   % Used
+FLASH                61360        61440     99.87%
+RAM                   3564         8192     43.51%
+```
+
+*(Projected from the measured +24 B delta over v7.6.10A (61,336 B). Re-run `./compile-with-docker.sh ApeX`
+for the byte-exact figure of your build — base/patched measurements are in the audit report §8.7.)*
+
+#### Getting Started:
+
+- UVTools: https://n7six.github.io/UVTools/
+- Compile: `./compile-with-docker.sh ApeX` (Docker) or `win_make.bat` (Windows)
+
+---
+
+
+
 ## UV-K5/K5(8)/K6 SERIES APEX EDITION — v7.6.10A Release Notes
 
 **Firmware Version:** v7.6.10A (ApeX Edition)  

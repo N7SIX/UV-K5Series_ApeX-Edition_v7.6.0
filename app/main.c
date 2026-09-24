@@ -335,6 +335,9 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
                         if (gEeprom.SQUELCH_LEVEL > 0) gEeprom.SQUELCH_LEVEL--;
                     }
                     gVfoConfigureMode = VFO_CONFIGURE;
+                    // RX audit RX-5: refresh both VFOs (dual-watch keeps the
+                    // other VFO's stale squelch thresholds otherwise).
+                    gFlagResetVfos    = true;
                 }
 
                 gWasFKeyPressed = false;

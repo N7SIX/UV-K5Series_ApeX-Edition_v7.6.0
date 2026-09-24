@@ -41,7 +41,8 @@ All `.md` and `.txt` documentation files are stored in this folder.
 ## Current Documentation
 
 ### Release Notes & Updates
-- **RELEASE_NOTES.md** - Technical release notes (v7.6.0 through v7.6.10)
+- **RELEASE_NOTES.md** - Technical release notes (v7.6.0 through v7.6.10B)
+- **v7.6.10B_GITHUB_RELEASE.md** - GitHub Release body for v7.6.10B (RX simplex/repeater fixes)
 - **v7.6.10_UPDATE_SUMMARY.md** - v7.6.10 update summary (UI/UX, battery calibration, waterfall)
 - **v7.6.6_UPDATE_SUMMARY.md** - v7.6.6 update summary (SysInf, scan-range, airband fixes)
 
@@ -69,6 +70,7 @@ All `.md` and `.txt` documentation files are stored in this folder.
 
 ### Technical Reference
 - **FLASH_AUDIT_K1.md** - FLASH usage audit for K1 hardware
+- **RX_SIMPLEX_REPEATER_AUDIT.md** - RX implementation audit (simplex & repeater): findings RX-1..RX-9, applied fixes, flash accounting
 - **AIRBAND_MODULATION_INVESTIGATION.md** - Airband AM enforcement investigation
 - **AUDIT_REPORT.md** - Code audit report
 - **DEPENDENCY_REFERENCE.md** - File and function dependencies
@@ -101,3 +103,4 @@ When creating new documentation:
 - [Codebase Structure](./CODEBASE_ANALYSIS.md)
 - [Spectrum Analyzer Guide](./SPECTRUM_ANALYZER_GUIDE.md)
 - [Flash Audit (K1)](./FLASH_AUDIT_K1.md)
+- [RX Simplex/Repeater Audit](./RX_SIMPLEX_REPEATER_AUDIT.md)

@@ -264,7 +264,11 @@ void RADIO_ConfigureChannel(const unsigned int VFO, const unsigned int configure
         tmp = data[3] >> 4;
         if (tmp >= MODULATION_UKNOWN)
             tmp = MODULATION_FM;
-        pVfo->Modulation = RADIO_GetModulationForFrequency(pVfo->freq_config_RX.Frequency, tmp);
+        // RX audit RX-1: store the EEPROM value verbatim here. The airband
+        // rule (RADIO_GetModulationForFrequency) is applied once below, after
+        // the new RX frequency is known (line ~404). Deriving it here used
+        // the *previous* RX frequency and latched AM onto the next channel.
+        pVfo->Modulation = tmp;
 
         tmp = data[6];
         if (tmp >= STEP_N_ELEM)
@@ -396,9 +400,11 @@ void RADIO_ConfigureChannel(const unsigned int VFO, const unsigned int configure
 
     pVfo->freq_config_RX.Frequency = frequency;
 
-    if (RADIO_IsAirbandFrequency(frequency))
-        pVfo->TX_OFFSET_FREQUENCY_DIRECTION = TX_OFFSET_FREQUENCY_DIRECTION_OFF;
-    else if (!IS_MR_CHANNEL(channel))
+    // RX audit RX-4: do not clear TX_OFFSET_FREQUENCY_DIRECTION for airband here.
+    // This object is serialised by SETTINGS_SaveChannel(), so clearing it erased
+    // a programmed repeater shift once the user tuned through 108-137 MHz.
+    // RADIO_ApplyOffset() applies the "airband has no shift" rule at use time.
+    if (!RADIO_IsAirbandFrequency(frequency) && !IS_MR_CHANNEL(channel))
         pVfo->TX_OFFSET_FREQUENCY = FREQUENCY_RoundToStep(pVfo->TX_OFFSET_FREQUENCY, pVfo->StepFrequency);
 
     pVfo->Modulation = RADIO_GetModulationForFrequency(frequency, pVfo->Modulation);
@@ -650,15 +656,24 @@ void RADIO_ApplyOffset(VFO_Info_t *pInfo)
 {
     uint32_t Frequency = pInfo->freq_config_RX.Frequency;
 
+    // RX audit RX-4: airband has no shift, but the stored direction is left
+    // untouched so a programmed offset is not erased by visiting 108-137 MHz.
+    // RX audit RX-2: guard the u32 arithmetic. An impossible offset borrows
+    // 0xFFFFFFFF (rejected by TX_freq_check under every F_LOCK mode, and the
+    // RX-LNA-off sentinel in BK4819_PickRXFilterPathBasedOnFrequency) instead
+    // of wrapping (e.g. 145 MHz SUB 999.999 MHz wrapped to 42.09 GHz).
+    uint32_t offset = RADIO_IsAirbandFrequency(Frequency) ? 0 : pInfo->TX_OFFSET_FREQUENCY;
+
     switch (pInfo->TX_OFFSET_FREQUENCY_DIRECTION)
     {
+        default:
         case TX_OFFSET_FREQUENCY_DIRECTION_OFF:
             break;
         case TX_OFFSET_FREQUENCY_DIRECTION_ADD:
-            Frequency += pInfo->TX_OFFSET_FREQUENCY;
+            Frequency = (offset > 0xFFFFFFFFu - Frequency) ? 0xFFFFFFFFu : Frequency + offset;
             break;
         case TX_OFFSET_FREQUENCY_DIRECTION_SUB:
-            Frequency -= pInfo->TX_OFFSET_FREQUENCY;
+            Frequency = (offset > Frequency) ? 0xFFFFFFFFu : Frequency - offset;
             break;
     }
 
@@ -1102,6 +1117,12 @@ void RADIO_PrepareTX(void)
     }
 
     RADIO_SelectCurrentVfo();
+
+    // RX audit RX-3: re-derive TX from the current RX frequency + offset
+    // before validating it. Frequency edits retune RX immediately while TX
+    // is refreshed by the deferred save/reconfigure cycle, so without this
+    // a PTT inside that window would transmit on the previous frequency.
+    RADIO_ApplyOffset(gCurrentVfo);
 
 #ifdef ENABLE_FEAT_N7SIX
         if(TX_freq_check(gCurrentVfo->pTX->Frequency) != 0 && gCurrentVfo->TX_LOCK == true

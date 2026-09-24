@@ -1645,7 +1645,10 @@ void UI_DisplayMain(void)
             UI_MAIN_DrawScanRssiSparkline(line);
 #endif
 
-        if((gScanStateDir == SCAN_OFF || vfo_num != gEeprom.RX_VFO) && TX_freq_check(frequency) != 0 && gEeprom.VfoInfo[vfo_num].TX_LOCK == true)
+        // RX audit RX-6: test the TX frequency, not the displayed RX frequency -
+        // with a cross-band offset the two differ, so the lock icon must be
+        // decided by whether TX is actually blocked (pTX->Frequency).
+        if((gScanStateDir == SCAN_OFF || vfo_num != gEeprom.RX_VFO) && TX_freq_check(gEeprom.VfoInfo[vfo_num].pTX->Frequency) != 0 && gEeprom.VfoInfo[vfo_num].TX_LOCK == true)
         {
             if (!FUNCTION_IsRx() || RxOnVfofrequency != frequency)
                 memcpy(p_line0 + 24, BITMAP_VFO_Lock, sizeof(BITMAP_VFO_Lock));

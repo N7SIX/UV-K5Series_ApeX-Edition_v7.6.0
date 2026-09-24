@@ -104,17 +104,17 @@ void GENERIC_Key_PTT(bool bKeyPressed)
     {   // PTT released
         if (gCurrentFunction == FUNCTION_TRANSMIT) {    
             // we are transmitting .. stop
-            if (gFlagEndTransmission) {
-                FUNCTION_Select(FUNCTION_FOREGROUND);
-            }
-            else {
+            // RX audit RX-7: honour RP-STE for both end-of-TX paths. Previously
+            // the gFlagEndTransmission case (only ever set by APP_EndTransmission(),
+            // e.g. through the TOT) jumped straight to FUNCTION_FOREGROUND, so the
+            // repeater tail was heard and the receiver stayed muted.
+            if (!gFlagEndTransmission)
                 APP_EndTransmission();
 
-                if (gEeprom.REPEATER_TAIL_TONE_ELIMINATION == 0)
-                    FUNCTION_Select(FUNCTION_FOREGROUND);
-                else
-                    gRTTECountdown_10ms = gEeprom.REPEATER_TAIL_TONE_ELIMINATION * 10;
-            }
+            if (gEeprom.REPEATER_TAIL_TONE_ELIMINATION == 0)
+                FUNCTION_Select(FUNCTION_FOREGROUND);
+            else
+                gRTTECountdown_10ms = gEeprom.REPEATER_TAIL_TONE_ELIMINATION * 10;
 
             gFlagEndTransmission = false;
 #ifdef ENABLE_VOX
