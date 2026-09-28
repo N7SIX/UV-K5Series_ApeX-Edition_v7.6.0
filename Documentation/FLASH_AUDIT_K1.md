@@ -81,6 +81,21 @@ Tree-level toggles (flash *saved* when turned OFF):
 UV-K1 spectrum core + SHADE on; BIDIR / BLACKLIST / REG_MENU / K1_EXTRAS /
 PEAK_HOLD / SMOOTH / RSSI_SQRT off; SMALL_BOLD + AUDIO_BAR + RSSI_BAR on.
 
+> **SUPERSEDED BY v7.6.10B — read this before using the table below.** Two
+> things moved after this audit was written:
+> 1. `ENABLE_SPECTRUM_PEAK_HOLD` and `ENABLE_SPECTRUM_SMOOTH` are now default
+>    **on** (`Makefile:46,48`), so the shipped config is no longer the one
+>    described above.
+> 2. Every number in this section was measured with **Arm GNU 14.3**, which
+>    emits ~620 B more code than the release toolchain. The current byte-exact
+>    Docker release build (`arm-none-eabi-gcc (Alpine Linux) 15.1.0`) is
+>    **61,364 B — 76 B free (99.88%)**, RAM 3,564 B, 0 warnings.
+>
+> The table is kept as the audit's historical record. For the live figures see
+> `RELEASE_NOTES.md` (v7.6.10B) and re-run `./compile-with-docker.sh ApeX`.
+> Do not size a feature against the 14.3 numbers in §4 either: measure deltas
+> with the same toolchain you will release with.
+
 | Metric | Value |
 |---|---|
 | text + data | 61,396 B |
