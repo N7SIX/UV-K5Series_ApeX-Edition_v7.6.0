@@ -379,9 +379,22 @@ static uint16_t GetRegMenuValue(uint8_t st)
 
 void LockAGC()
 {
-    //RADIO_SetupAGC(settings.modulationType == MODULATION_AM, lockAGC);
-    RADIO_SetupAGC(false, lockAGC);
-    //lockAGC = true;
+    // Called from SetRegMenuValue() immediately BEFORE the user edits the AGC
+    // gain table (REG_13).  The point is to stop RADIO_SetupAGC() from
+    // re-initialising the table over that edit.
+    //
+    // The old body was "RADIO_SetupAGC(false, lockAGC); lockAGC = false;".
+    // lockAGC is only ever false here (it is set false in ResetSpectrumToDefaults
+    // and after every LockAGC(), and never set true because the "lockAGC = true"
+    // line is commented out), so the call always passed disable=false and ran
+    // BK4819_SetAGC(true) + BK4819_InitAGC(false) - the exact opposite of
+    // locking, and it re-initialised the very table the caller was about to
+    // edit.  Pass the intent directly: disable the AGC (that is what "lock"
+    // means for this chip) and leave it disabled.
+    //
+    // The AGC is re-enabled and re-initialised on the way out by ToggleRX(false)
+    // and by RADIO_SetupRegisters() when the receiver is reconfigured.
+    RADIO_SetupAGC(false, true);
     lockAGC = false;
 }
 
@@ -724,8 +737,23 @@ static void ToggleRX(bool on)
     #endif
     isListening = on;
 
-    //RADIO_SetupAGC(settings.modulationType == MODULATION_AM, lockAGC);
-    RADIO_SetupAGC(false, lockAGC);
+    // AGC handling on the listen-mode edge:
+    //   on  -> freeze the AGC.  While tuning to a peak the gain table and the
+    //           enable bit must not be re-initialised, or the level the peak was
+    //           detected at shifts under the user.  The previous code passed
+    //           "lockAGC" here, but lockAGC is unconditionally reset to false
+    //           immediately after every LockAGC() call and ToggleRX() never sets
+    //           it, so the argument was ALWAYS false and entering listen mode
+    //           silently ran BK4819_InitAGC() - i.e. it froze nothing.
+    //   off -> restore the AGC for the mode actually being received, otherwise
+    //           the receiver would be left with the frozen/disabled AGC and the
+    //           audio level and S-meter would stay wrong after the spectrum view
+    //           closes (the "intermittent RX" symptom).
+    if (on) {
+        // leave the AGC exactly as configured
+    } else {
+        RADIO_SetupAGC(gRxVfo->Modulation == MODULATION_AM, false);
+    }
 
     BK4819_ToggleGpioOut(BK4819_GPIO6_PIN2_GREEN, on);
 

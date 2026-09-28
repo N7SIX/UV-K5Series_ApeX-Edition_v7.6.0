@@ -1049,14 +1049,34 @@ void RADIO_SetModulation(ModulationMode_t modulation)
 
 void RADIO_SetupAGC(bool listeningAM, bool disable)
 {
-    static uint8_t lastSettings;
-    uint8_t newSettings = (listeningAM << 1) | disable;
-    if(lastSettings == newSettings)
-        return;
-    lastSettings = newSettings;
-
-
-    if(!listeningAM) { // if not actively listening AM we don't need any AM specific regulation
+    // This function used to early-return when (listeningAM, disable) matched the
+    // previous call, via a function-local "static uint8_t lastSettings" cache.
+    //
+    // That cache assumed RADIO_SetupAGC is the only writer of the AGC registers,
+    // which is false.  app/spectrum.c programs the AGC gain table (REG_13) and
+    // the AGC enable bit behind its back:
+    //   - SetRegMenuValue() writes REG_13 directly (LockAGC() is called first
+    //     precisely so the AGC is not re-initialised over the user's edit),
+    //   - ToggleRX()/LockAGC() call RADIO_SetupAGC(false, lockAGC) with
+    //     lockAGC already false, so the "disable" argument is always false and
+    //     the cache key (listeningAM<<1)|disable never changes on the spectrum
+    //     path at all.
+    // Together with RestoreRegisters() only restoring REG_7E (the enable bit)
+    // and not REG_10..14 (the gain table), the cache could leave the receiver
+    // with the AGC disabled or a stale gain table after leaving the spectrum
+    // view: audio stays silent or the S-meter is wrong, until something else
+    // happened to change the modulation and invalidate the key.  That is the
+    // classic "intermittent RX" signature - it depends on the exact sequence of
+    // user actions, so it never reproduces reliably.
+    //
+    // The two register writes below are ~6 SPI bytes and only run on an RX
+    // reconfigure, a modulation change, or a spectrum listen-mode toggle.  The
+    // flash cost of removing the cache is a few bytes and correctness is worth
+    // far more; the old caching was only ever a micro-optimisation.  If a
+    // register-write storm ever becomes a real concern, the correct fix is a
+    // single shared "AGC state" flag that every writer (including spectrum.c)
+    // invalidates - not a private cache nobody else can clear.
+    if (!listeningAM) { // if not actively listening AM we don't need any AM specific regulation
         BK4819_SetAGC(!disable);
         BK4819_InitAGC(false);
     }
