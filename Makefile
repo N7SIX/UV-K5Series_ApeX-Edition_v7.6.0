@@ -96,10 +96,13 @@ ENABLE_SPECTRUM_K1_EXTRAS       ?= 0
 # exactly 0 B, and -fno-ipa-cp / -fno-jump-tables made the image LARGER.
 #
 # Default configuration (UV-K1 spectrum core + SHADE, BIDIR/BLACKLIST/
-# REG_MENU/K1_EXTRAS/PEAK/SMOOTH off, SMALL_BOLD + AUDIO_BAR + RSSI_BAR on):
-#   image 61396 B of the 61440 B limit  ->  +44 B margin
-#   packed (fw-pack: image + 16-byte version block @0x2000 +2) = 61414 B
-# (see Documentation/FLASH_AUDIT_K1.md).  Turn a toggle off only if a
+# REG_MENU/K1_EXTRAS off, PEAK/SMOOTH on, SMALL_BOLD + AUDIO_BAR + RSSI_BAR on).
+# Measured v7.6.10C release build (arm-none-eabi-gcc (Alpine Linux) 15.1.0,
+# EDITION_STRING=ApeX TARGET=ApeX): image 61348 B of the 61440 B limit
+#   ->  +92 B margin;  packed (image + 16-byte version block @0x2000 + 2) = 61366 B
+# RAM 3560 B.  Earlier 14.3-local figures (61396 B) are ~620 B larger for the
+# SAME code and must not be used to judge fitness - see
+# Documentation/FLASH_AUDIT_v7.6.10_FINAL.md.  Turn a toggle off only if a
 # new feature needs the headroom.
 #
 # !! DO NOT put an inline "# comment" after a value with whitespace before the '#' !!
@@ -329,7 +332,7 @@ ifeq ($(ENABLE_FEAT_N7SIX),1)
 	VERSION_STRING_1 ?= v0.22
 
 	AUTHOR_STRING_2 ?= N7SIX
-	VERSION_STRING_2 ?= v7.6.10B
+	VERSION_STRING_2 ?= v7.6.10C
 
 	EDITION_STRING ?= Custom
 

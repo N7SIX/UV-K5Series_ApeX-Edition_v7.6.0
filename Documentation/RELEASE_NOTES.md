@@ -1,5 +1,171 @@
 # UV-K5/K5(8)/K6 SERIES APEX EDITION
 
+## UV-K5/K5(8)/K6 SERIES APEX EDITION — v7.6.10C Release Notes
+
+**Firmware Version:** v7.6.10C (ApeX Edition)  
+**Release Date:** September 28, 2026  
+**Status:** Bug fix release — two receive-path stability fixes (AGC state desync, permanently-armed DTMF decoder).
+
+#### RX Implementation Fixes (Simplex & Repeater)
+
+Two independent defects in the receive path, both able to leave the radio
+intermittently silent or choppy while listening to a repeater. They were found
+by tracing the reported symptom — *UHF memory channel, repeater offset, audio
+opening and closing, spurious DTMF digits at the same time* — back through the
+tone and AGC state machines. Neither is present in the upstream lineage; both
+were introduced by this tree's spectrum and DTMF work.
+
+- **RX-10 — DTMF decoder was permanently armed; "D Live = off" never took effect**
+
+  - **Root Cause:** `RADIO_SetupRegisters()` called `BK4819_EnableDTMF()` and OR'd
+    `BK4819_REG_3F_DTMF_5TONE_FOUND` into the interrupt mask unconditionally, on
+    *every* RX reconfigure. The user's setting was consulted in exactly one
+    place, the `MENU_D_LIVE_DEC` handler (`app/menu.c:903`), which calls
+    `BK4819_DisableDTMF()` when the decoder is switched off — but that same
+    handler then sets `gFlagReconfigureVfos`, which reaches
+    `RADIO_SetupRegisters()` within a few milliseconds and re-enables it. The
+    setting could therefore never stick, and the decoder was live on every
+    channel at all times.
+
+  - **Impact:** the DTMF decoder is a tone detector that shares the
+    CTCSS/tail-detection filter bank. Permanently armed on a channel with no
+    DTMF, ordinary voice and noise energy on a UHF repeater carrier can raise a
+    "code found" interrupt. `CheckRadioInterrupts()` latched every one of those
+    as a genuine digit, appended it to the live decoder and forced a display
+    refresh, and the same tone energy perturbed the tail/squelch detector — so
+    the RX audio opened and closed while spurious DTMF digits were displayed.
+    This is the "intermittent RX" report.
+
+  - **Fix:** `RADIO_SetupRegisters()` now honours `gSetting_live_DTMF_decoder`
+    and leaves `DTMF_5TONE_FOUND` out of the interrupt mask when the decoder is
+    off, so a spurious digit cannot be latched at all. The DTMF **transmit**
+    paths are untouched — they enable and disable the decoder around every
+    transmission (`BK4819_EnterDTMF_TX` / `BK4819_ExitDTMF_TX`), and
+    `FUNCTION_Transmit()` already disabled it before keying, so PTT-ID and
+    DTMF-ID are unaffected.
+
+  - **Affected Files:**
+    - `radio/radio.c` — `RADIO_SetupRegisters()`
+
+- **RX-11 — AGC state desync could leave the receiver muted or at the wrong gain**
+
+  - **Root Cause:** `RADIO_SetupAGC()` early-returned whenever its
+    `(listeningAM, disable)` arguments matched the previous call, via a
+    function-local `static uint8_t lastSettings` cache. That assumed it was the
+    only writer of the AGC registers, which is false: `app/spectrum.c` writes
+    `REG_13` (the AGC gain table) directly, calling `LockAGC()` first precisely
+    so the AGC is *not* re-initialised over the user's edit. Both `LockAGC()`
+    and `ToggleRX()` also passed the `lockAGC` flag as the "disable" argument,
+    but `lockAGC` is unconditionally reset to `false` immediately after every
+    call and is never set `true` (the `lockAGC = true` line is commented out),
+    so the argument was always `false` and the cache key never changed on the
+    spectrum path at all. `RestoreRegisters()` completes the problem: it
+    restores `REG_7E` (the AGC enable bit) but not `REG_10..14` (the gain
+    table).
+
+  - **Impact:** after using the spectrum view, the receiver could be left with
+    the AGC disabled or a stale gain table, and the cache then suppressed the
+    corrective write on the next RX reconfigure. Audio stayed silent or the
+    S-meter read wrong until an unrelated modulation change happened to
+    invalidate the cache key — the classic "sometimes it works" signature.
+
+  - **Fix:** the unsound cache is removed and the AGC is programmed from the
+    requested state on every call. `LockAGC()` now passes its real intent
+    (`disable = true`) instead of the always-`false` `lockAGC` flag, and
+    `ToggleRX()` freezes the AGC while listening to a peak and restores it for
+    the received mode when listen mode ends.
+
+  - **Affected Files:**
+    - `radio/radio.c` — `RADIO_SetupAGC()`
+    - `app/spectrum.c` — `LockAGC()`, `ToggleRX()`
+
+#### Verification
+
+- **Build:** full release build with `-Oz -Wall -Wextra -Werror -std=c2x` + LTO
+  + `--gc-sections` — **0 warnings, 0 errors**.
+- **Byte-exact release measurement** (`uvk5` image,
+  `arm-none-eabi-gcc (Alpine Linux) 15.1.0`, `EDITION_STRING=ApeX TARGET=ApeX`),
+  every figure re-measured on the same image for a like-for-like delta:
+
+  | Build | FLASH | RAM | free |
+  |---|---|---|---|
+  | v7.6.10B baseline | 61,364 B | 3,564 B | 76 B |
+  | + RX-11 (AGC) | 61,204 B | 3,560 B | 236 B |
+  | + RX-10 (DTMF) — **v7.6.10C** | **61,348 B** | **3,560 B** | **92 B** |
+
+  The net change is **−16 B FLASH and −4 B RAM** against v7.6.10B: both fixes
+  *reduce* size, and the image stays inside the 61,440 B flashable window.
+- **Bench checks recommended on hardware:** on the UHF memory channel with a
+  repeater offset that showed the fault — (1) spurious DTMF digits should stop
+  appearing, or keep appearing if that repeater genuinely carries DTMF, in
+  which case the digits are legitimate and the UHF squelch table is the next
+  suspect; (2) listen in the spectrum view and return, then confirm audio and
+  S-meter are still correct; (3) confirm PTT-ID / DTMF-ID still key correctly.
+  **These fixes are code-verified and build-verified but not yet
+  bench-verified.**
+
+#### Build tooling fixed in the same cycle
+
+- `tools/build_k5.ps1` had drifted from the `Makefile` and had not produced a
+  valid link since the UV-K1 spectrum work landed: it listed a file that does
+  not exist, omitted three required sources, passed no `-DENABLE_SPECTRUM` (so
+  the whole spectrum module compiled away and the size it printed was
+  meaningless), omitted the size-tuning flags, and had its string `-D` macros
+  mangled by PowerShell argument re-quoting. It now parses the version strings
+  and every `ENABLE_*` toggle from the `Makefile` at run time, so a future
+  version bump cannot silently mislabel a build.
+- **Caution:** a local (non-Docker) toolchain produces a **larger** image for
+  identical code — measured 61,984 B vs 61,348 B, i.e. ~620 B. Never judge
+  flash fitness from a local build; use `./compile-with-docker.sh ApeX`. See
+  `FLASH_AUDIT_v7.6.10_FINAL.md` §1.
+
+#### Version Bump
+
+- **Firmware version updated from v7.6.10B to v7.6.10C**
+
+  - **Changed Files:**
+    - `Makefile` — `VERSION_STRING_2` default updated (this is what the build
+      actually reads; the packed image is now named
+      `n7six.ApeX-k5.v7.6.10C.packed.bin`)
+    - `Makefile` — FLASH budget comment corrected to the v7.6.10C measurement
+      (it still quoted the 14.3-local 61,396 B figure)
+    - `tools/defines_aapex.txt` — `VERSION_STRING` and `VERSION_STRING_2`
+      updated (local, git-ignored define set)
+    - `tools/build_k5.ps1` — needs no edit; it reads the version from the
+      `Makefile` at run time
+
+#### Files Modified
+
+- `radio/radio.c` — RX-10 (DTMF armed only when wanted), RX-11 (AGC state desync)
+- `app/spectrum.c` — RX-11 (`LockAGC()` / `ToggleRX()` AGC handling)
+- `Makefile` — version bump to v7.6.10C + corrected FLASH budget comment
+- `tools/build_k5.ps1` — rewritten as a faithful mirror of the `Makefile` defaults
+- `Documentation/FLASH_AUDIT_K1.md` — §5 annotated as superseded
+- `Documentation/FLASH_AUDIT_v7.6.10_FINAL.md` — the false "default build
+  overfills by ~504 B" claim corrected; the error was the local toolchain, not
+  the `Makefile` defaults
+- `Documentation/README.md` — documentation index updated
+
+#### Memory Usage:
+
+```
+Memory Region      Used Size  Region Size   % Used
+FLASH                61348        61440     99.85%
+RAM                   3560         8192     43.46%
+```
+
+*(Byte-exact Docker release build (`uvk5` image, `arm-none-eabi-gcc 15.1.0`,
+`EDITION_STRING=ApeX TARGET=ApeX`): `.bin` image 61,348 B = text 61,288 +
+data 60, packed 61,366 B. Re-run `./compile-with-docker.sh ApeX` for the
+byte-exact figure of your own build.)*
+
+#### Getting Started:
+
+- UVTools: https://n7six.github.io/UVTools/
+- Compile: `./compile-with-docker.sh ApeX` (Docker) or `win_make.bat` (Windows)
+
+---
+
 ## UV-K5/K5(8)/K6 SERIES APEX EDITION — v7.6.10B Release Notes
 
 **Firmware Version:** v7.6.10B (ApeX Edition)  
