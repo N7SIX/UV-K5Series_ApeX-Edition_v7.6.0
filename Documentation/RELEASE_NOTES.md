@@ -101,12 +101,11 @@ Full report: [`RX_SIMPLEX_REPEATER_AUDIT.md`](RX_SIMPLEX_REPEATER_AUDIT.md) (fin
 
 ```
 Memory Region      Used Size  Region Size   % Used
-FLASH                61360        61440     99.87%
+FLASH                61364        61440     99.88%
 RAM                   3564         8192     43.51%
 ```
 
-*(Projected from the measured +24 B delta over v7.6.10A (61,336 B). Re-run `./compile-with-docker.sh ApeX`
-for the byte-exact figure of your build — base/patched measurements are in the audit report §8.7.)*
+*(Byte-exact Docker release build (`uvk5` image, `arm-none-eabi-gcc 15.1.0`, `EDITION_STRING=ApeX TARGET=ApeX BUILD_COMMIT=0eb39d2`): `.bin` image 61,364 B = text 61,304 + data 60. Re-run `./compile-with-docker.sh ApeX` for the byte-exact figure of your build — base/patched measurements are in the audit report §8.7.)*
 
 #### Getting Started:
 

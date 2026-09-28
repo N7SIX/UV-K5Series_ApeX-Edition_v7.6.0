@@ -665,13 +665,14 @@ FLASH accounting (arm-none-eabi 14.3.1, local Windows build; the `.bin` is what 
 `.bss` is unchanged (3,360 B in the release set, 3,504 B in the defaults set) — **no RAM cost**, and
 the patch set touches none of the flash-critical size paths (spectrum, fonts, bitmaps, menu tables).
 
-**Released-image projection:** the shipped `build/ApeX/n7six.ApeX-k5.v7.6.10A.bin` is 61,336 B of
-the 61,440 B budget (+104 B). Adding the measured Δ gives ≈ **61,360 B → ~80 B still free**. The
-released ELF was built with **Alpine GCC 15.1.0** (Docker; read from the ELF `.comment` section),
-whereas the local Windows toolchain is Arm GNU 14.3.1, which emits ~1.5 kB larger images for the
-same configuration — so re-run `./compile-with-docker.sh ApeX` for the byte-exact release figure.
-The **Δ is what transfers**, and it measured +24 B identically in both configurations above. If the
-remaining ~80 B is ever insufficient, the escalation list in [`FLASH_AUDIT_K1.md`](FLASH_AUDIT_K1.md) §6
+**Released-image measurement (byte-exact):** the shipped Docker release build
+(`uvk5` image, `arm-none-eabi-gcc 15.1.0`, `EDITION_STRING=ApeX TARGET=ApeX
+BUILD_COMMIT=0eb39d2`) is **61,364 B** of the 61,440 B budget (**76 B free**,
+text 61,304 + data 60, RAM 3,564 B). This matches the projection (61,336 B
+v7.6.10A base + 24 B Δ ≈ 61,360 B) to within 4 B — the residual is the
+`BUILD_COMMIT` string length difference between builds. The Δ is what
+transfers, and it measured +24 B identically in both configurations above. If
+headroom ever runs out, the escalation list in [`FLASH_AUDIT_K1.md`](FLASH_AUDIT_K1.md) §6
 (cheapest first: `ENABLE_SPECTRUM_SHADE=0` → +32 B) is the lever.
 
 ---
