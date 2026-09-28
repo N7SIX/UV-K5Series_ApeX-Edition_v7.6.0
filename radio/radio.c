@@ -883,8 +883,34 @@ void RADIO_SetupRegisters(bool switchToForeground)
     // RX expander
     BK4819_SetCompander((gRxVfo->Modulation == MODULATION_FM && gRxVfo->Compander >= 2) ? gRxVfo->Compander : 0);
 
-    BK4819_EnableDTMF();
-    InterruptMask |= BK4819_REG_3F_DTMF_5TONE_FOUND;
+    // RX-10: only arm the DTMF decoder when it is actually wanted.
+    //
+    // BK4819_EnableDTMF() used to be called unconditionally here, on every
+    // single RX reconfigure, regardless of the user's "D Live" setting.  The
+    // setting is only consulted once, in the MENU_D_LIVE_DEC handler
+    // (app/menu.c:903), which calls BK4819_DisableDTMF() when the user turns
+    // the decoder OFF - but that same handler then sets gFlagReconfigureVfos,
+    // which lands here within a few ms and re-enables it again.  So "D Live =
+    // off" could never stick, and the decoder was permanently live.
+    //
+    // That matters because the DTMF decoder is a tone detector sharing the
+    // CTCSS/tail-detection filter bank.  With it always armed on a channel that
+    // has no DTMF, a DTMF "code found" interrupt can be raised by ordinary
+    // voice/noise energy on a UHF repeater carrier.  CheckRadioInterrupts()
+    // treats every one of those as a real digit, appends it to the live
+    // decoder buffer and forces a display refresh, and the same tone energy
+    // perturbs the squelch/tail detector, so the RX audio opens and closes
+    // ("intermittent RX") while the operator sees spurious DTMF digits at the
+    // same time - exactly the reported symptom.
+    //
+    // Honour the setting here, and keep the DTMF_FOUND interrupt out of the
+    // mask when the decoder is off, so no bogus digit can be latched at all.
+    if (gSetting_live_DTMF_decoder) {
+        BK4819_EnableDTMF();
+        InterruptMask |= BK4819_REG_3F_DTMF_5TONE_FOUND;
+    } else {
+        BK4819_DisableDTMF();
+    }
 
     RADIO_SetupAGC(gRxVfo->Modulation == MODULATION_AM, false);
 
