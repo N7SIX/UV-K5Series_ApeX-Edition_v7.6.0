@@ -4,16 +4,18 @@
 
 **Firmware Version:** v7.6.10C (ApeX Edition)  
 **Release Date:** September 28, 2026  
-**Status:** Bug fix release — two receive-path stability fixes (AGC state desync, permanently-armed DTMF decoder).
+**Status:** Bug fix release — three receive-path stability fixes (AGC state desync, permanently-armed DTMF decoder, RX audio path armed by the amplifier GPIO only) plus a new EEPROM diagnostic tool.
 
 #### RX Implementation Fixes (Simplex & Repeater)
 
-Two independent defects in the receive path, both able to leave the radio
-intermittently silent or choppy while listening to a repeater. They were found
+Three independent defects in the receive path, all able to leave the radio
+silent while the receiver itself is plainly working. The first two were found
 by tracing the reported symptom — *UHF memory channel, repeater offset, audio
 opening and closing, spurious DTMF digits at the same time* — back through the
-tone and AGC state machines. Neither is present in the upstream lineage; both
-were introduced by this tree's spectrum and DTMF work.
+tone and AGC state machines. The third (RX-12) came from the companion report
+*one VFO of a band is completely silent, S-meter alive*; the two causes are
+independent and can be present together. None of the three is present in the
+upstream lineage; all were introduced by this tree's spectrum, DTMF and VFO work.
 
 - **RX-10 — DTMF decoder was permanently armed; "D Live = off" never took effect**
 
@@ -79,6 +81,78 @@ were introduced by this tree's spectrum and DTMF work.
     - `radio/radio.c` — `RADIO_SetupAGC()`
     - `app/spectrum.c` — `LockAGC()`, `ToggleRX()`
 
+- **RX-12 — the RX audio path was armed by the amplifier GPIO only, so one VFO could stay silent**
+
+  - **Root Cause:** the entire tree arms receiver audio with a single helper,
+    `AUDIO_AudioPathOn()` (`audio/audio.h:56`), which drives *only*
+    `GPIOC_PIN_AUDIO_PATH`. It never re-asserts the BK4819's own audio enables —
+    `REG_30<9>` (AF DAC) and `REG_47<8>` (AF output) — and neither did the RX
+    entry: `APP_StartListening()` called the GPIO helper and nothing else. Both
+    bits are **global, not per VFO**, and several code paths legitimately leave
+    them cleared: `app/spectrum.c:857` (`InitScan`) caches
+    `scanReg30 = REG_30 & ~(1<<9)` with the AF DAC masked off *by design* and
+    `SetFScan()` rewrites that cached value on **every sweep step**;
+    `ToggleAFBit()` owns `REG_47<8>` for the listen mode; the TX/DTMF entry and
+    exit paths in `driver/bk4819.c` write `REG_30` masks without the AF DAC; and
+    beep/voice playback re-programs `REG_30`/`REG_71` around the GPIO toggles.
+    The spectrum module does restore state on its own exit
+    (`BackupRegisters`/`RestoreRegisters`, `ToggleRX()` → `ToggleAFDAC()`), but
+    that is cooperation between callers rather than a guarantee: any path that
+    mutates those bits and does not restore them hands the next RX start a dead
+    audio path.
+
+  - **Impact:** if the last writer left `REG_30<9>` or `REG_47<8>` cleared and RX
+    then started with the GPIO alone, the BK4819 kept demodulating — RSSI,
+    squelch and the tone detector all behaved normally — while nothing reached
+    the speaker. Because the state is global, dual watch surfaces the other
+    VFO's leftover session as *"VFO B is silent while VFO A works in the same
+    band"*, which is exactly the reported symptom (often also described as
+    "garbled MDC", because a partially armed path is indistinguishable from a
+    marginal signal to the MDC preamble detector).
+
+  - **Fix:** adopted from the **UV-K1Series ApeX Edition** firmware (`App/radio.c`,
+    v7.6.10D), which replaced the scattered GPIO toggles with one authoritative
+    `RADIO_SetAudioPath(bool)` — the K1 runs the same chip and the same code
+    lineage, so the function transfers unchanged. It re-asserts
+    `REG_30<9>`/`REG_47<8>`, waits 500 µs for the DAC to settle, and **then**
+    un-mutes the amplifier; on exit it mutes the amplifier **first** and drops the
+    chip bits afterwards. `APP_StartListening()` now calls it, so *every* RX entry
+    — including both dual-watch directions and every VFO switch — re-arms the
+    chip. The mute sites were left as GPIO-only toggles on purpose: each is
+    paired with an RX entry that re-arms, and routing them through the new
+    function would have added delay to paths that do not need it (tail-tone
+    elimination, DTMF side tone).
+
+  - **Affected Files:**
+    - `radio/radio.c` — new `RADIO_SetAudioPath()`, `#include "driver/systick.h"`
+    - `radio/radio.h` — declaration
+    - `app/app.c` — `APP_StartListening()`
+    - Full analysis, call-site inventory and bench checks:
+      `Documentation/RX_SIMPLEX_REPEATER_AUDIT.md` §8.8
+
+- **RX-12 companion — `tools/rx_probe_vfo.ps1` (new diagnostic tool)**
+
+  - **Why:** the other cause of a VFO-B-only silence is *stored*, not firmware.
+    VFO A and VFO B of one band share the band attribute byte (`0x0E28 + band`),
+    so the only thing that can differ is that VFO's own 16-byte record
+    (`0x0C80 + band*32 + VFO*16`): a stale `RxCTCS`/`RxDCS` code gates the audio
+    in `HandleIncoming()` (`app/app.c:197`) while the squelch stays open, and a
+    non-FM modulation switches the AF path to AM/USB
+    (`radio/radio.c:1042`), which makes an FM signal quiet and destroys the
+    MDC-1200 preamble.
+
+  - **What it does:** decodes all 14 VFO records of a raw 8 KiB EEPROM dump,
+    prints a verdict per record (`CRIT` / `warn` / `ok` / `empty`), shows the
+    per-band A-vs-B byte diff, and names the exact byte at fault. It can also
+    write a *corrected copy* of the image (`-PatchTo -ForceFM -ClearRxTone
+    -Wide`); it never modifies the input file and refuses to overwrite an
+    existing target.
+
+  - **Status:** validated against a synthetic EEPROM covering erased records,
+    CTCSS, DCS, reverse mode, airband, out-of-range nibbles, the A/B diff, a
+    patch round-trip, and the three input guard rails. Procedure and bench
+    checks: `Documentation/VFO_RX_SILENCE_DIAGNOSTIC.md`.
+
 #### Verification
 
 - **Build:** full release build with `-Oz -Wall -Wextra -Werror -std=c2x` + LTO
@@ -91,16 +165,39 @@ were introduced by this tree's spectrum and DTMF work.
   |---|---|---|---|
   | v7.6.10B baseline | 61,364 B | 3,564 B | 76 B |
   | + RX-11 (AGC) | 61,204 B | 3,560 B | 236 B |
-  | + RX-10 (DTMF) — **v7.6.10C** | **61,348 B** | **3,560 B** | **92 B** |
+  | + RX-10 (DTMF) | 61,348 B | 3,560 B | 92 B |
+  | + RX-12 (audio path) — **v7.6.10C shipped** | **61,396 B** | **3,560 B** | **44 B** |
 
-  The net change is **−16 B FLASH and −4 B RAM** against v7.6.10B: both fixes
-  *reduce* size, and the image stays inside the 61,440 B flashable window.
+  RX-10 and RX-11 *reduce* size: net **−16 B FLASH and −4 B RAM** against
+  v7.6.10B. RX-12 adds **+48 B FLASH, 0 B RAM** — predicted as a delta on the
+  same tree with the local `arm-none-eabi-gcc 14.3.Rel1` (61,956 B → 62,004 B;
+  both figures are over the window there, which is why only the delta is
+  meaningful per `FLASH_AUDIT_v7.6.10_FINAL.md` §1) and then **confirmed by the
+  byte-exact release build: 61,348 B → 61,396 B**, exactly +48 B. The image stays
+  inside the 61,440 B flashable window with **44 B free**, so no feature had to
+  be cut.
+
+  With 44 B of headroom the §6 escalation list
+  ([`FLASH_AUDIT_K1.md`](FLASH_AUDIT_K1.md)) is relevant again: if the next
+  change does not fit, `ENABLE_SPECTRUM_SHADE=0` is the cheapest lever at
+  +32 B — and dropping the spectrum also removes the largest source of the
+  AF-DAC state leak RX-12 is about.
+- **Diagnostic tool verification:** `tools/rx_probe_vfo.ps1` validated against a
+  synthetic 8 KiB EEPROM image (erased records, CTCSS, DCS, reverse mode,
+  airband, out-of-range nibbles, A/B byte diff), a patch round-trip that clears
+  the reported `CRIT` rows, and its three guard rails (missing file, Intel HEX
+  input, truncated image).
 - **Bench checks recommended on hardware:** on the UHF memory channel with a
-  repeater offset that showed the fault — (1) spurious DTMF digits should stop
-  appearing, or keep appearing if that repeater genuinely carries DTMF, in
+  repeater offset that showed the first fault — (1) spurious DTMF digits should
+  stop appearing, or keep appearing if that repeater genuinely carries DTMF, in
   which case the digits are legitimate and the UHF squelch table is the next
   suspect; (2) listen in the spectrum view and return, then confirm audio and
   S-meter are still correct; (3) confirm PTT-ID / DTMF-ID still key correctly.
+  For RX-12, on the VFO that was silent — (4) audio must be present directly
+  after leaving the spectrum view, after a transmission, and after a beep/tone,
+  with dual watch toggling both ways; (5) no new pops or clicks when RX starts
+  or stops; (6) if audio is *still* missing, run `tools/rx_probe_vfo.ps1` on a
+  fresh dump — a remaining `CRIT` row identifies a stored configuration cause.
   **These fixes are code-verified and build-verified but not yet
   bench-verified.**
 
@@ -115,8 +212,9 @@ were introduced by this tree's spectrum and DTMF work.
   and every `ENABLE_*` toggle from the `Makefile` at run time, so a future
   version bump cannot silently mislabel a build.
 - **Caution:** a local (non-Docker) toolchain produces a **larger** image for
-  identical code — measured 61,984 B vs 61,348 B, i.e. ~620 B. Never judge
-  flash fitness from a local build; use `./compile-with-docker.sh ApeX`. See
+  identical code — measured 62,004 B vs 61,396 B on this tree, i.e. ~608 B
+  (61,984 B vs 61,348 B before RX-12). Never judge flash fitness from a local
+  build; use `./compile-with-docker.sh ApeX`. See
   `FLASH_AUDIT_v7.6.10_FINAL.md` §1.
 
 #### Version Bump
@@ -128,7 +226,9 @@ were introduced by this tree's spectrum and DTMF work.
       actually reads; the packed image is now named
       `n7six.ApeX-k5.v7.6.10C.packed.bin`)
     - `Makefile` — FLASH budget comment corrected to the v7.6.10C measurement
-      (it still quoted the 14.3-local 61,396 B figure)
+      (it still quoted a 14.3-local 61,396 B figure, which is coincidentally the
+      same number the *release* build now measures for a different reason — see
+      the RX-12 addendum in `FLASH_AUDIT_K1.md`)
     - `tools/defines_aapex.txt` — `VERSION_STRING` and `VERSION_STRING_2`
       updated (local, git-ignored define set)
     - `tools/build_k5.ps1` — needs no edit; it reads the version from the
@@ -136,8 +236,11 @@ were introduced by this tree's spectrum and DTMF work.
 
 #### Files Modified
 
-- `radio/radio.c` — RX-10 (DTMF armed only when wanted), RX-11 (AGC state desync)
+- `radio/radio.c` — RX-10 (DTMF armed only when wanted), RX-11 (AGC state desync), RX-12 (`RADIO_SetAudioPath()` + `#include "driver/systick.h"`)
+- `radio/radio.h` — RX-12 (`RADIO_SetAudioPath()` declaration)
+- `app/app.c` — RX-12 (`APP_StartListening()` arms the chip audio enables)
 - `app/spectrum.c` — RX-11 (`LockAGC()` / `ToggleRX()` AGC handling)
+- `tools/rx_probe_vfo.ps1` — **new**, per-VFO EEPROM decoder/auditor (RX-12 companion)
 - `Makefile` — version bump to v7.6.10C + corrected FLASH budget comment
 - `tools/build_k5.ps1` — rewritten as a faithful mirror of the `Makefile` defaults
 - `Documentation/FLASH_AUDIT_K1.md` — §5 annotated as superseded
@@ -145,19 +248,23 @@ were introduced by this tree's spectrum and DTMF work.
   overfills by ~504 B" claim corrected; the error was the local toolchain, not
   the `Makefile` defaults
 - `Documentation/README.md` — documentation index updated
+- `Documentation/RELEASE_NOTES.md`, `Documentation/v7.6.10C_GITHUB_RELEASE.md` — RX-12 and the diagnostic tool added
+- `Documentation/RX_SIMPLEX_REPEATER_AUDIT.md` — §8.8 (RX-12: finding, call-site inventory, flash delta, bench checks)
+- `Documentation/VFO_RX_SILENCE_DIAGNOSTIC.md` — **new**, per-VFO silence procedure (firmware cause RX-12 + stored causes)
 
 #### Memory Usage:
 
 ```
 Memory Region      Used Size  Region Size   % Used
-FLASH                61348        61440     99.85%
+FLASH                61396        61440     99.93%
 RAM                   3560         8192     43.46%
 ```
 
 *(Byte-exact Docker release build (`uvk5` image, `arm-none-eabi-gcc 15.1.0`,
-`EDITION_STRING=ApeX TARGET=ApeX`): `.bin` image 61,348 B = text 61,288 +
-data 60, packed 61,366 B. Re-run `./compile-with-docker.sh ApeX` for the
-byte-exact figure of your own build.)*
+`EDITION_STRING=ApeX TARGET=ApeX`): `.bin` image **61,396 B**, packed 61,414 B,
+**44 B free** in the 61,440 B flashable window. That is the shipped v7.6.10C
+image with RX-10, RX-11 and RX-12; RAM is 3,560 B. Re-run
+`./compile-with-docker.sh ApeX` for the byte-exact figure of your own build.)*
 
 #### Getting Started:
 

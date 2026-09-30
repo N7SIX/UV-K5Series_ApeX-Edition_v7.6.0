@@ -96,6 +96,19 @@ PEAK_HOLD / SMOOTH / RSSI_SQRT off; SMALL_BOLD + AUDIO_BAR + RSSI_BAR on.
 > Do not size a feature against the 14.3 numbers in §4 either: measure deltas
 > with the same toolchain you will release with.
 
+> **v7.6.10C addendum (RX-12).** The shipped v7.6.10C image — RX-10, RX-11 and
+> RX-12 — is **61,396 B / 44 B free (99.93%)**, RAM 3,560 B. The RX audio-path fix
+> adopted from the UV-K1Series firmware (`RADIO_SetAudioPath()`, `radio/radio.c`)
+> accounts for **+48 B FLASH, 0 B RAM** of that: 61,348 B before RX-12 plus exactly
+> the delta measured on the same tree with the 14.3 toolchain (61,956 B →
+> 62,004 B; both of those are over the window, which is why only the delta is
+> meaningful — see `FLASH_AUDIT_v7.6.10_FINAL.md` §1).
+>
+> **44 B free is thin**, so the §6 escalation list matters again:
+> `ENABLE_SPECTRUM_SHADE=0` (+32 B) is the cheapest lever, and dropping the
+> spectrum also removes the biggest source of the AF-DAC state leak that RX-12
+> fixes.
+
 | Metric | Value |
 |---|---|
 | text + data | 61,396 B |

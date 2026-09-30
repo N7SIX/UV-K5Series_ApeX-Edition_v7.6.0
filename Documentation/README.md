@@ -3,6 +3,7 @@
 **Firmware Version:** v7.6.10 (ApeX Edition)
 **Release Date:** September 21, 2026
 **Status:** v7.6.10 release — UI/UX modernization (UV-K1 Fusion), 2-point battery calibration, and FLASH optimization.
+**Current patch level:** **v7.6.10C** — three receive-path stability fixes (RX-10 permanently-armed DTMF decoder, RX-11 AGC state desync, RX-12 RX audio path armed by the amplifier GPIO only) plus the `tools/rx_probe_vfo.ps1` EEPROM diagnostic. See [`v7.6.10C_GITHUB_RELEASE.md`](v7.6.10C_GITHUB_RELEASE.md) and [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
 #### Key Updates:
 - **UI/UX Modernization:**
@@ -25,12 +26,14 @@
 - UVTools: https://n7six.github.io/UVTools/
 - Compile: `./compile-with-docker.sh ApeX` (Docker) or `win_make.bat` (Windows)
 
-#### Memory Usage:
+#### Memory Usage (shipped v7.6.10C, byte-exact Docker release build):
 ```
 Memory Region      Used Size  Region Size   % Used
-FLASH                61280        61440     99.74%
-RAM                   3372         8192     41.16%
+FLASH                61396        61440     99.93%
+RAM                   3560         8192     43.46%
 ```
+*(61,396 B image, 61,414 B packed — 44 B free in the flashable window. The
+v7.6.10 baseline below the waterfall note was 61,280 B / 99.74%.)*
 
 ---
 
@@ -42,7 +45,7 @@ All `.md` and `.txt` documentation files are stored in this folder.
 
 ### Release Notes & Updates
 - **RELEASE_NOTES.md** - Technical release notes (v7.6.0 through v7.6.10C)
-- **v7.6.10C_GITHUB_RELEASE.md** - GitHub Release body for v7.6.10C (RX intermittent / spurious DTMF fixes)
+- **v7.6.10C_GITHUB_RELEASE.md** - GitHub Release body for v7.6.10C (RX-10 DTMF, RX-11 AGC desync, RX-12 audio path + `tools/rx_probe_vfo.ps1`)
 - **v7.6.10B_GITHUB_RELEASE.md** - GitHub Release body for v7.6.10B (RX simplex/repeater fixes)
 - **v7.6.10_UPDATE_SUMMARY.md** - v7.6.10 update summary (UI/UX, battery calibration, waterfall)
 - **v7.6.6_UPDATE_SUMMARY.md** - v7.6.6 update summary (SysInf, scan-range, airband fixes)
@@ -71,7 +74,8 @@ All `.md` and `.txt` documentation files are stored in this folder.
 
 ### Technical Reference
 - **FLASH_AUDIT_K1.md** - FLASH usage audit for K1 hardware
-- **RX_SIMPLEX_REPEATER_AUDIT.md** - RX implementation audit (simplex & repeater): findings RX-1..RX-9, applied fixes, flash accounting
+- **RX_SIMPLEX_REPEATER_AUDIT.md** - RX implementation audit (simplex & repeater): findings RX-1..RX-9, applied fixes, flash accounting; §8.8 = RX-12 RX audio path
+- **VFO_RX_SILENCE_DIAGNOSTIC.md** - "VFO B is silent / garbled MDC" procedure: firmware cause (RX-12) + stored causes, and `tools/rx_probe_vfo.ps1`
 - **AIRBAND_MODULATION_INVESTIGATION.md** - Airband AM enforcement investigation
 - **AUDIT_REPORT.md** - Code audit report
 - **DEPENDENCY_REFERENCE.md** - File and function dependencies
@@ -105,3 +109,5 @@ When creating new documentation:
 - [Spectrum Analyzer Guide](./SPECTRUM_ANALYZER_GUIDE.md)
 - [Flash Audit (K1)](./FLASH_AUDIT_K1.md)
 - [RX Simplex/Repeater Audit](./RX_SIMPLEX_REPEATER_AUDIT.md)
+- [VFO B RX Silence Diagnostic](./VFO_RX_SILENCE_DIAGNOSTIC.md)
+- [v7.6.10C GitHub Release](./v7.6.10C_GITHUB_RELEASE.md)

@@ -46,6 +46,14 @@ wrong frequency** and/or is silently refused.
 | RX-8 | Info | Build config | In an `ENABLE_AM_FIX=1` build the RX/TX filter is always programmed as "weak signal" variant because the intended conditional is commented out (`radio/radio.c:713-718`, `955-960`). |
 | RX-9 | Info | Hygiene | Dead `#else` branch for `SQL_TONE`, large commented-out power-scaling blocks and stale comments in the RX setup path; no functional impact. |
 
+> **Later findings, documented after this table was written (2026-09-24 snapshot
+> above):** RX-10 (DTMF decoder permanently armed) and RX-11 (unsound AGC state
+> cache) shipped in **v7.6.10C** — see [`v7.6.10C_GITHUB_RELEASE.md`](v7.6.10C_GITHUB_RELEASE.md)
+> and `RELEASE_NOTES.md`. RX-12 (the RX audio path was armed by the amplifier
+> GPIO only, so the BK4819 AF enables could stay cleared and leave the receiver
+> demodulating into nothing) also ships in v7.6.10C — see **§8.8** and
+> [`VFO_RX_SILENCE_DIAGNOSTIC.md`](VFO_RX_SILENCE_DIAGNOSTIC.md).
+
 **Shipped-build cross-check.** All findings were re-validated against the actual ApeX release
 define set (`tools/defines_aapex.txt`): `ENABLE_FEAT_N7SIX=1`, `ENABLE_SPECTRUM=1`,
 `ENABLE_WIDE_RX=0`, `ENABLE_TX_WHEN_AM=0`, `ENABLE_AM_FIX=0`, and
@@ -674,6 +682,106 @@ v7.6.10A base + 24 B Δ ≈ 61,360 B) to within 4 B — the residual is the
 transfers, and it measured +24 B identically in both configurations above. If
 headroom ever runs out, the escalation list in [`FLASH_AUDIT_K1.md`](FLASH_AUDIT_K1.md) §6
 (cheapest first: `ENABLE_SPECTRUM_SHADE=0` → +32 B) is the lever.
+
+---
+
+### 8.8 RX-12 — the RX audio path was armed by the amplifier GPIO only (2026-09-29)
+
+**Symptom it explains:** RX audio completely absent on one VFO while the S-meter
+is alive and the squelch opens — "VFO B is silent" with VFO A in the same band
+working. Reported against v7.6.10B/10C, traced to a firmware state leak rather
+than to the stored VFO record (that second cause is documented separately in
+[`VFO_RX_SILENCE_DIAGNOSTIC.md`](VFO_RX_SILENCE_DIAGNOSTIC.md)).
+
+**Finding.** The whole K5 tree arms the receiver's audio with one GPIO:
+
+```c
+/* audio/audio.h:56 */
+static inline void AUDIO_AudioPathOn(void) { GPIO_SetBit(&GPIOC->DATA, GPIOC_PIN_AUDIO_PATH); }
+```
+
+`AUDIO_AudioPathOn()` drives only the amplifier enable. It does **not** touch the
+BK4819's own audio enables, `REG_30<9>` (AF DAC) and `REG_47<8>` (AF output), and
+neither did the RX entry: `APP_StartListening()` called the GPIO helper and
+nothing else. Both bits are **global, not per VFO**, and several paths leave them
+cleared:
+
+| Writer | What it does to the AF enables |
+|---|---|
+| `app/spectrum.c:857` (`InitScan`) | caches `scanReg30 = REG_30 & ~(1<<9)` — AF DAC masked **off by design** |
+| `app/spectrum.c:572-573` (`SetFScan`) | rewrites `REG_30 = 0; REG_30 = scanReg30;` on **every sweep step** |
+| `app/spectrum.c:489-496` (`ToggleAFBit`) | owns `REG_47<8>` for the listen mode |
+| `driver/bk4819.c:786-799, 960-961, 1014-1032` | TX/DTMF entry and exit write `REG_30` masks without the AF DAC |
+| `audio/audio.c:72-192` (beep/voice) | tone playback re-programs `REG_30`/`REG_71` around the GPIO toggles |
+
+If the last of those left `REG_30<9>` (or `REG_47<8>`) cleared and RX then armed
+with the GPIO alone, the BK4819 kept demodulating — RSSI, squelch and the tone
+detector all behaved — while nothing reached the speaker. The spectrum module
+does restore state on its own exit (`BackupRegisters`/`RestoreRegisters`,
+`ToggleRX()` → `ToggleAFDAC()`), but that is cooperation between callers, not a
+guarantee: any path that mutates those bits and does not restore them hands the
+next RX start a dead audio path.
+
+**Fix — adopted from the UV-K1Series ApeX Edition firmware** (`App/radio.c`,
+v7.6.10D, `RADIO_SetAudioPath()`, whose own comment calls it "centralized audio
+path control with pop-suppression sequencing"). The K1 has the same chip and the
+same lineage, so the function transfers unchanged:
+
+| ID | File (post-patch line) | Change |
+|----|------------------------|--------|
+| RX-12 | `radio/radio.c:1098-1134` (new `RADIO_SetAudioPath()`), `#include "driver/systick.h"` at `:32` | Entry: `REG_30 \|= AF_DAC`, `REG_47 \|= 1<<8`, `SYSTICK_DelayUs(500)`, **then** `AUDIO_AudioPathOn()`. Exit: `AUDIO_AudioPathOff()`, `SYSTICK_DelayUs(500)`, **then** clear both chip bits. The ordering is the pop control: the chip has a valid source before the amp opens, and the amp is closed before the chip bits move. |
+| RX-12 | `radio/radio.h:172` | `void RADIO_SetAudioPath(bool on);` |
+| RX-12 | `app/app.c:518-525` (`APP_StartListening()`) | `AUDIO_AudioPathOn()` → `RADIO_SetAudioPath(true)`, so **every** RX entry re-asserts the chip bits. Dual watch and the VFO switch all pass through here. |
+
+The mute sites were deliberately left as GPIO-only toggles: each is paired with an
+RX entry that now re-arms, and changing them would have added delay to paths
+(tail-tone elimination, DTMF side tone) that do not need it. The K1 keeps the
+same split — `RADIO_SetAudioPath()` is the entry point, the peripheral toggles
+stay local.
+
+**Verification performed:**
+
+* **Compile gate:** full build with the project flags (`-Oz -Wall -Wextra -Werror
+  -std=c2x`, `-ffunction-sections/-fdata-sections`, single-partition LTO,
+  `--gc-sections`) — **0 warnings, 0 errors**, `Done: ApeX Edition, Successful!`
+  (`arm-none-eabi-gcc 14.3.Rel1`; Git-bash `mkdir`/`bash` on PATH for the
+  Makefile's POSIX-isms).
+* **Static:** call-site inventory of `AUDIO_AudioPathOn/Off` (30 sites across
+  `app/`, `audio/`, `driver/`, `radio/`, `ui/`) — every "un-mute after a mute"
+  site either is `APP_StartListening()` (now fixed) or is a TX/tone path that is
+  always followed by an RX entry.
+* **Not yet bench-verified.** No hardware was available; the fix is adopted
+  verbatim from the K1 release, but the on-radio confirmation is outstanding.
+
+**FLASH accounting (arm-none-eabi 14.3.Rel1, local Windows build, plain
+`Makefile ?=` defaults):**
+
+| Configuration | Base | Patched | Δ |
+|---------------|------|---------|----|
+| `n7six.ApeX.v7.6.10C.elf` (`EDITION_STRING=Custom`) | 61,956 B | 62,004 B | **+48 B** |
+| RAM (data + bss) | 3,560 B | 3,560 B | **0 B** |
+
+Per the correction in [`FLASH_AUDIT_v7.6.10_FINAL.md`](FLASH_AUDIT_v7.6.10_FINAL.md)
+§1, the local 14.3 toolchain emits ~620 B more code than the release toolchain, so
+those absolute local numbers (both over the 61,440 B limit) are not the release
+figures — the **Δ is what transfers**, and it did: the byte-exact release build
+(`uvk5`, `arm-none-eabi-gcc (Alpine Linux) 15.1.0`) measures **61,396 B, 44 B
+free**, i.e. 61,348 B (items 1-2) + exactly the predicted **+48 B**. RAM is
+unchanged at 3,560 B.
+
+**44 B free is thin.** The §6 escalation list
+([`FLASH_AUDIT_K1.md`](FLASH_AUDIT_K1.md)) applies again: `ENABLE_SPECTRUM_SHADE=0`
+is the cheapest lever at +32 B, and turning the spectrum off also removes the
+largest source of the AF-DAC hazard this finding is about.
+
+**Bench checks (no source change required):**
+
+| Check | Procedure | Expected before / after |
+|-------|-----------|--------------------------|
+| RX-12 spectrum | open the spectrum view on a busy frequency, leave it with a signal present | audio may be dead (S-meter alive) / audio live |
+| RX-12 dual watch | dual watch on, transmit on VFO A, listen on VFO B | VFO B silent until an unrelated action / VFO B audio present |
+| RX-12 tone | play a beep/tone, return to receive | may be silent / audio present |
+| RX-12 no-regression | normal receive, monitor, tail-tone elimination, DTMF side tone | no change / no change, no added pops |
 
 ---
 
