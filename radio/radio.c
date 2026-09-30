@@ -1081,9 +1081,9 @@ void RADIO_SetModulation(ModulationMode_t modulation)
 // the receiver itself is alive:
 //
 //   AUDIO_AudioPathOn() only drives GPIOC_PIN_AUDIO_PATH.  It does NOT re-assert
-//   the chip's AF enables - REG_30<9> (AF DAC) and REG_47<8> (AF output).  Both
-//   bits are global, not per VFO, and several code paths legitimately leave them
-//   cleared for a while: the spectrum sweep caches REG_30 with bit 9 masked out
+//   the chip's AF DAC enable - REG_30<9>.  That bit is global, not per VFO, and
+//   several code paths legitimately leave it cleared for a while: the spectrum
+//   sweep caches REG_30 with bit 9 masked out
 //   (app/spectrum.c:857) and rewrites it on every step, TX/DTMF exits write
 //   REG_30 without the AF DAC, and tone playback re-programs REG_30/71.  If RX
 //   then starts with the amplifier GPIO alone, the BK4819 keeps demodulating
@@ -1092,21 +1092,30 @@ void RADIO_SetModulation(ModulationMode_t modulation)
 //   sees as "VFO B is silent".
 //
 // Entry therefore re-enables the chip first and un-mutes the amplifier last;
-// exit mutes the amplifier first and drops the chip enables last, so there is no
-// pop.  Every RX entry goes through here, so no leftover chip state can silence
-// the receiver any more.
+// exit mutes the amplifier first and drops the chip enable last, so there is no
+// pop.  APP_StartListening() calls this on entry (app/app.c:525).
+//
+// REG_47 is deliberately NOT touched here.  REG_47<11:8> is not an AF "enable"
+// bit, it is a 4-bit AF *output select* enum - see afOutRegSpec in
+// driver/bk4819-regs.h and enum BK4819_AF_Type_t in driver/bk4819.h, where
+// MUTE=0, FM=1, ALAM=2, BEEP=3, BASEBAND1=4, BASEBAND2=5, CTCO=6, AM=7.
+// BK4819_SetAF() is its only legitimate writer.  OR-ing bit 8 read as "enable",
+// but it is really "AF |= 1": on the way up it turned MUTE into FM, and on the
+// way down it would have turned AM into CTCO, BASEBAND2 into BASEBAND1 and BEEP
+// into ALAM.  That write was in any case dead in effect - APP_StartListening()
+// runs RADIO_SetModulation() unconditionally right after this call
+// (app/app.c:572), which overwrites REG_47 outright through BK4819_SetAF(), so
+// no value written here ever survived to steady state.  RX-entry AF select is
+// owned by RADIO_SetModulation(); do not second-guess it from this function.
 void RADIO_SetAudioPath(bool on)
 {
     if (on)
     {
-        // 1. AF DAC + AF output first, so the chip has a valid audio source
+        // 1. AF DAC enable first, so the chip has a valid audio source.
+        //    REG_47's AF select is intentionally left alone - see the note above.
         uint16_t reg30 = BK4819_ReadRegister(BK4819_REG_30);
         reg30 |= (uint16_t)BK4819_REG_30_MASK_ENABLE_AF_DAC;
         BK4819_WriteRegister(BK4819_REG_30, reg30);
-
-        uint16_t reg47 = BK4819_ReadRegister(BK4819_REG_47);
-        reg47 |= (uint16_t)(1u << 8);
-        BK4819_WriteRegister(BK4819_REG_47, reg47);
 
         // 2. let the DAC output settle
         SYSTICK_DelayUs(500);
@@ -1122,14 +1131,11 @@ void RADIO_SetAudioPath(bool on)
         // 2. let the mute transistor settle
         SYSTICK_DelayUs(500);
 
-        // 3. then drop the chip's AF enables, the transient is inaudible by now
+        // 3. then drop the chip's AF DAC enable, the transient is inaudible by
+        //    now.  REG_47 is left to RADIO_SetModulation()/BK4819_SetupSquelch().
         uint16_t reg30 = BK4819_ReadRegister(BK4819_REG_30);
         reg30 &= (uint16_t)~BK4819_REG_30_MASK_ENABLE_AF_DAC;
         BK4819_WriteRegister(BK4819_REG_30, reg30);
-
-        uint16_t reg47 = BK4819_ReadRegister(BK4819_REG_47);
-        reg47 &= (uint16_t)~(1u << 8);
-        BK4819_WriteRegister(BK4819_REG_47, reg47);
     }
 }
 

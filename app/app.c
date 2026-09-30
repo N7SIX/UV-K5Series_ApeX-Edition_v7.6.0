@@ -518,10 +518,12 @@ void APP_StartListening(FUNCTION_Type_t function)
     // clear the other vfo's rssi level (to hide the antenna symbol)
     gVFO_RSSI_bar_level[!vfo] = 0;
 
-    // Authoritative RX audio arm-up: re-asserts the BK4819 AF enables
-    // (REG_30<9>, REG_47<8>) before un-muting the amplifier, so leftover chip
-    // state from the previous VFO / spectrum / TX-DTMF session can no longer
-    // leave the receiver demodulating into nothing.  See RADIO_SetAudioPath().
+    // Authoritative RX audio arm-up: re-asserts the BK4819 AF DAC enable
+    // (REG_30<9>) before un-muting the amplifier, so leftover chip state from
+    // the previous VFO / spectrum / TX-DTMF session can no longer leave the
+    // receiver demodulating into nothing.  REG_47's AF select is NOT touched
+    // here - RADIO_SetModulation() below owns it and overwrites it outright.
+    // See RADIO_SetAudioPath().
     RADIO_SetAudioPath(true);
     gEnableSpeaker = true;
 

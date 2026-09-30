@@ -486,14 +486,18 @@ void SetState(State state)
 
 // Radio functions
 
-static void ToggleAFBit(bool on)
-{
-    uint16_t reg = BK4819_ReadRegister(BK4819_REG_47);
-    reg &= ~(1 << 8);
-    if (on)
-        reg |= on << 8;
-    BK4819_WriteRegister(BK4819_REG_47, reg);
-}
+// NOTE: deliberately no ToggleAFBit() here.  REG_47<11:8> is NOT an AF enable
+// bit - it is the 4-bit AF *output select* enum (afOutRegSpec in
+// driver/bk4819-regs.h; see enum BK4819_AF_Type_t: MUTE=0, FM=1, ALAM=2,
+// BEEP=3, BASEBAND1=4, BASEBAND2=5, CTCO=6, AM=7), and BK4819_SetAF() is its
+// only legitimate writer.  This file used to carry ToggleAFBit(), shaped like
+// ToggleAFDAC() but aimed at bit 8, which really just did "AF ^= 1": on the way
+// in it turned MUTE into FM, on the way out it turned AM into CTCO,
+// BASEBAND2 into BASEBAND1 and BEEP into ALAM - leaving a corrupted AF select
+// behind every time the spectrum view closed.  AF gating here is already
+// complete without it: ToggleAFDAC() owns the real enable (REG_30<9>) and
+// ToggleAudio() owns the amplifier GPIO.  The RX-entry AF select is restored by
+// RADIO_SetModulation() once the normal RX path resumes.
 
 static const BK4819_REGISTER_t registers_to_save[] = {
     BK4819_REG_30,
@@ -758,8 +762,9 @@ static void ToggleRX(bool on)
     BK4819_ToggleGpioOut(BK4819_GPIO6_PIN2_GREEN, on);
 
     ToggleAudio(on);
-    ToggleAFDAC(on);
-    ToggleAFBit(on);
+    ToggleAFDAC(on);   // REG_30<9> - the real AF DAC enable bit
+    // No ToggleAFBit(): REG_47<11:8> is the AF select enum, not an enable bit.
+    // See the REG_47 note in the "Radio functions" section above.
 
     if (on)
     {
