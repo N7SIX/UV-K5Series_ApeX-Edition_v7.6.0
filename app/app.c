@@ -518,7 +518,11 @@ void APP_StartListening(FUNCTION_Type_t function)
     // clear the other vfo's rssi level (to hide the antenna symbol)
     gVFO_RSSI_bar_level[!vfo] = 0;
 
-    AUDIO_AudioPathOn();
+    // Authoritative RX audio arm-up: re-asserts the BK4819 AF enables
+    // (REG_30<9>, REG_47<8>) before un-muting the amplifier, so leftover chip
+    // state from the previous VFO / spectrum / TX-DTMF session can no longer
+    // leave the receiver demodulating into nothing.  See RADIO_SetAudioPath().
+    RADIO_SetAudioPath(true);
     gEnableSpeaker = true;
 
     if (gSetting_backlight_on_tx_rx & BACKLIGHT_ON_TR_RX) {

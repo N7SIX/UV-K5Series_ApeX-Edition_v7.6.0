@@ -29,6 +29,7 @@
 #include "driver/eeprom.h"
 #include "driver/gpio.h"
 #include "driver/system.h"
+#include "driver/systick.h"
 #include "frequencies.h"
 #include "functions.h"
 #include "helper/battery.h"
@@ -1071,6 +1072,65 @@ void RADIO_SetModulation(ModulationMode_t modulation)
     BK4819_SetRegValue(afcDisableRegSpec, modulation != MODULATION_FM);
 
     RADIO_SetupAGC(modulation == MODULATION_AM, false);
+}
+
+// Adopted from the UV-K1Series ApeX Edition firmware (App/radio.c, v7.6.10D,
+// "RADIO_SetAudioPath - centralized audio path control with pop-suppression
+// sequencing").  The K1 replaced the scattered GPIO-only toggles with one
+// authoritative switch, and that is what fixes RX audio that stays dead while
+// the receiver itself is alive:
+//
+//   AUDIO_AudioPathOn() only drives GPIOC_PIN_AUDIO_PATH.  It does NOT re-assert
+//   the chip's AF enables - REG_30<9> (AF DAC) and REG_47<8> (AF output).  Both
+//   bits are global, not per VFO, and several code paths legitimately leave them
+//   cleared for a while: the spectrum sweep caches REG_30 with bit 9 masked out
+//   (app/spectrum.c:857) and rewrites it on every step, TX/DTMF exits write
+//   REG_30 without the AF DAC, and tone playback re-programs REG_30/71.  If RX
+//   then starts with the amplifier GPIO alone, the BK4819 keeps demodulating
+//   (S-meter moves, squelch opens) but nothing reaches the speaker - and with
+//   dual watch the leftover state of the other VFO's session is what the user
+//   sees as "VFO B is silent".
+//
+// Entry therefore re-enables the chip first and un-mutes the amplifier last;
+// exit mutes the amplifier first and drops the chip enables last, so there is no
+// pop.  Every RX entry goes through here, so no leftover chip state can silence
+// the receiver any more.
+void RADIO_SetAudioPath(bool on)
+{
+    if (on)
+    {
+        // 1. AF DAC + AF output first, so the chip has a valid audio source
+        uint16_t reg30 = BK4819_ReadRegister(BK4819_REG_30);
+        reg30 |= (uint16_t)BK4819_REG_30_MASK_ENABLE_AF_DAC;
+        BK4819_WriteRegister(BK4819_REG_30, reg30);
+
+        uint16_t reg47 = BK4819_ReadRegister(BK4819_REG_47);
+        reg47 |= (uint16_t)(1u << 8);
+        BK4819_WriteRegister(BK4819_REG_47, reg47);
+
+        // 2. let the DAC output settle
+        SYSTICK_DelayUs(500);
+
+        // 3. then un-mute the speaker
+        AUDIO_AudioPathOn();
+    }
+    else
+    {
+        // 1. mute the speaker first (clean cutoff)
+        AUDIO_AudioPathOff();
+
+        // 2. let the mute transistor settle
+        SYSTICK_DelayUs(500);
+
+        // 3. then drop the chip's AF enables, the transient is inaudible by now
+        uint16_t reg30 = BK4819_ReadRegister(BK4819_REG_30);
+        reg30 &= (uint16_t)~BK4819_REG_30_MASK_ENABLE_AF_DAC;
+        BK4819_WriteRegister(BK4819_REG_30, reg30);
+
+        uint16_t reg47 = BK4819_ReadRegister(BK4819_REG_47);
+        reg47 &= (uint16_t)~(1u << 8);
+        BK4819_WriteRegister(BK4819_REG_47, reg47);
+    }
 }
 
 void RADIO_SetupAGC(bool listeningAM, bool disable)
