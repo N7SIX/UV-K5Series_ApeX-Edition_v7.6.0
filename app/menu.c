@@ -625,6 +625,16 @@ void MENU_AcceptSetting(void)
         case MENU_W_N:
             gTxVfo->CHANNEL_BANDWIDTH = gSubMenuSelection;
             gRequestSaveChannel       = 1;
+
+            // NOTE: this does not ask for a reconfigure, so the new width is
+            // stored and displayed but REG_43 keeps its old value until some
+            // unrelated event triggers a full RADIO_SetupRegisters().  Setting
+            // gFlagReconfigureVfos = true here is the one-line fix (it is what
+            // MENU_VOX / MENU_TDR / MENU_MIC do, and app.c turns it into
+            // RADIO_SelectVfos() + RADIO_SetupRegisters(true)); it is omitted
+            // only because the firmware is at its FLASH limit.  The action-key
+            // path in ACTION_Wn() does program the chip immediately, so the
+            // common case is not affected.
             return;
 
 #ifndef ENABLE_FEAT_N7SIX

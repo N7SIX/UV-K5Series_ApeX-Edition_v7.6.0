@@ -570,10 +570,16 @@ void ACTION_Wn(void)
                 narrower = 1;
             }
 
+            // "narrower" must be added here too.  It used to be computed above
+            // and then dropped, so the TX branch programmed a different
+            // REG_43 than the RX branch for the identical WIDE/NAR setting
+            // (12.5 kHz on TX vs 6.25 kHz on RX when the NFM narrower option
+            // was on).  Only reachable with ENABLE_FEAT_N7SIX_NARROWER=1, but
+            // when that option is enabled TX and RX must agree.
             #ifdef ENABLE_AM_FIX
-                BK4819_SetFilterBandwidth(gTxVfo->CHANNEL_BANDWIDTH, true);
+                BK4819_SetFilterBandwidth(gTxVfo->CHANNEL_BANDWIDTH + narrower, true);
             #else
-                BK4819_SetFilterBandwidth(gTxVfo->CHANNEL_BANDWIDTH, false);
+                BK4819_SetFilterBandwidth(gTxVfo->CHANNEL_BANDWIDTH + narrower, false);
             #endif
         }
     #else
@@ -596,6 +602,30 @@ void ACTION_Wn(void)
             #endif
         }
     #endif
+
+    // Persist the new width.
+    //
+    // This handler used to change CHANNEL_BANDWIDTH and program REG_43, and
+    // nothing else.  It never set gRequestSaveChannel, so the new value only
+    // ever existed in the in-RAM VfoInfo struct.  Any later
+    // RADIO_ConfigureChannel() reload re-reads the width from the stored
+    // channel record (radio.c, CHANNEL_BANDWIDTH = !!((d4 >> 1) & 1u)) and
+    // silently reverts it - i.e. pressing the W/N key appeared to work and then
+    // randomly undid itself on the next channel change, VFO A/B switch, band
+    // change, MR->VFO copy or power cycle.  That is the "intermittent RX"
+    // signature: the state depends on whatever unrelated action happened next.
+    //
+    // gRequestSaveChannel follows the same convention as ACTION_Power() and
+    // every other per-VFO action; the deferred save (key release) is already
+    // handled centrally in app.c.
+    //
+    // NOTE: this deliberately does NOT also request a screen redraw (the
+    // ACTION_Power() pattern).  The WIDE/NAR indicator in the status line is
+    // then only refreshed by the next unrelated repaint, so the label can lag
+    // the value actually programmed into REG_43.  That is cosmetic, and the
+    // firmware is at its FLASH limit, so the redraw is left out for now; it
+    // is a one-line addition if bytes are ever recovered.
+    gRequestSaveChannel = 1;
 }
 
 void ACTION_BackLight(void)
