@@ -715,7 +715,7 @@ void BK4819_SetupSquelch(
     // <7:0>   8 Glitch threshold for Squelch = open
     //         0 ~ 255
     //
-    BK4819_WriteRegister(BK4819_REG_4E,  // 01 101 11 1 00000000
+    BK4819_WriteRegister(BK4819_REG_4E,  // 01 101 11 0 00000000
 
         // original (*)
     (1u << 14) |                  //  1 ???
@@ -745,6 +745,46 @@ void BK4819_SetupSquelch(
     BK4819_WriteRegister(BK4819_REG_78, ((uint16_t)SquelchOpenRSSIThresh   << 8) | SquelchCloseRSSIThresh);
 
     BK4819_SetAF(BK4819_AF_MUTE);
+
+    // RX-13: silence the microphone amplifier's AGC for as long as we are
+    // receiving.
+    //
+    // REG_19<15> is "MIC AGC" (1 = disable, 0 = enable) and BK4819_Init() leaves
+    // it at 0, i.e. the mic AGC runs for the whole life of the radio - the only
+    // mic gating that ever happens is BK4819_REG_30_DISABLE_MIC_ADC in
+    // BK4819_RX_TurnOn(), which switches the mic ADC path off but leaves the
+    // amplifier itself powered and driving the shared signal-strength / AGC
+    // detection node.
+    //
+    // That is what makes this receive path sensitive to the room.  With the mic
+    // amplifier still injecting into the AGC domain, the level the AGC and the
+    // squelch compare against moves with whatever the mic picks up:
+    //
+    //   - mic silent            -> level sags, sits on the squelch trip point, RX
+    //                              opens and closes audibly
+    //   - someone speaking      -> extra apparent signal energy, AGC steps to a
+    //                              lower-gain index, squelch driven clearly open,
+    //                              RX stable
+    //
+    // i.e. mic audio was stabilising the receiver, which is the opposite of what
+    // a receiver should do.  It only shows in NARROW because that is where the
+    // AGC has least margin: the narrower IF filter lowers the noise floor, the
+    // AGC commands more gain, and the fixed gain table (REG_10..14, never
+    // characterised per bandwidth) leaves it fighting near a threshold.
+    //
+    // Disabling MIC AGC for the receive state removes the mic from the AGC
+    // domain outright, rather than trying to compensate for its contribution
+    // somewhere downstream.  TX is unaffected: BK4819_TxOn_Beep() restores it
+    // before the modulator uses the mic, so mic AGC still works for transmit.
+    //
+    // Nothing is needed for VOX here because VOX is not built in this
+    // configuration (ENABLE_VOX ?= 0).
+    //
+    // NOT BENCH-VERIFIED.  The coupling described above is inferred from the
+    // reported behaviour plus the register map, not measured.  If RX is still
+    // intermittent in NARROW with the mic silent, the remaining suspect is the
+    // AGC gain table itself (REG_10..14), not the mic.
+    BK4819_WriteRegister(BK4819_REG_19, 0x9041);   // 0x1041 | MIC AGC disable
 
     BK4819_RX_TurnOn();
 }
@@ -1109,6 +1149,18 @@ void BK4819_PrepareTransmit(void)
 
 void BK4819_TxOn_Beep(void)
 {
+    // Re-enable the microphone AGC for transmit.
+    //
+    // BK4819_SetupSquelch() clears REG_19<15> (MIC AGC disable) for the whole
+    // receive state so the mic amplifier cannot drag the RX AGC around; see the
+    // RX-13 comment there.  TX needs mic AGC back, because the modulator and the
+    // mic gain control rely on it, so restore the power-on value here before the
+    // mic is used.  Without this, transmit audio level would be wrong after any
+    // receive.
+    //
+    // 0x1041 is the value BK4819_Init() programs, i.e. MIC AGC enabled.
+    BK4819_WriteRegister(BK4819_REG_19, 0x1041);
+
     BK4819_WriteRegister(BK4819_REG_37, 0x1D0F);
     BK4819_WriteRegister(BK4819_REG_52, 0x028F);
     BK4819_WriteRegister(BK4819_REG_30, 0x0000);
