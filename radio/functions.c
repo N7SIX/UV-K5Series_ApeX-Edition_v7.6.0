@@ -55,7 +55,9 @@ void FUNCTION_Init(void)
     g_CDCSS_Lost       = false;
     g_CTCSS_Lost       = false;
 
-    g_SquelchLost      = false;
+    // SQL 0 means the receiver is open continuously. Normal squelch levels
+        // start closed and wait for the BK4819 SQUELCH_LOST event.
+        g_SquelchLost      = (gEeprom.SQUELCH_LEVEL == 0);
 
     gFlagTailNoteEliminationComplete   = false;
     gTailNoteEliminationCountdown_10ms = 0;

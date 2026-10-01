@@ -516,6 +516,8 @@ void RADIO_ConfigureSquelchAndOutputPower(VFO_Info_t *pInfo)
 
         pInfo->SquelchOpenNoiseThresh   = (noise_open   > 127) ? 127 : noise_open;
         pInfo->SquelchCloseNoiseThresh  = (noise_close  > 127) ? 127 : noise_close;
+
+
     }
 
     // *******************************
@@ -769,7 +771,8 @@ void RADIO_SetupRegisters(bool switchToForeground)
     BK4819_SetupSquelch(
         gRxVfo->SquelchOpenRSSIThresh,    gRxVfo->SquelchCloseRSSIThresh,
         gRxVfo->SquelchOpenNoiseThresh,   gRxVfo->SquelchCloseNoiseThresh,
-        gRxVfo->SquelchCloseGlitchThresh, gRxVfo->SquelchOpenGlitchThresh);
+        gRxVfo->SquelchCloseGlitchThresh, gRxVfo->SquelchOpenGlitchThresh,
+        gRxVfo->CHANNEL_BANDWIDTH == BK4819_FILTER_BW_NARROW);
 
     BK4819_PickRXFilterPathBasedOnFrequency(Frequency);
 
@@ -785,7 +788,12 @@ void RADIO_SetupRegisters(bool switchToForeground)
         (gEeprom.DAC_GAIN    << 0));     // AF DAC Gain (after Gain-1 and Gain-2)
 
 
-    uint16_t InterruptMask = BK4819_REG_3F_SQUELCH_FOUND | BK4819_REG_3F_SQUELCH_LOST;
+    // SQL 0 is an open-monitor mode, not merely a set of permissive
+        // thresholds. Do not let the BK4819 close the receiver again through its
+        // squelch interrupts; FUNCTION_Init() marks the receive state open below.
+        uint16_t InterruptMask = (gEeprom.SQUELCH_LEVEL == 0)
+            ? 0
+            : BK4819_REG_3F_SQUELCH_FOUND | BK4819_REG_3F_SQUELCH_LOST;
 
     #ifdef ENABLE_NOAA
         if (!IS_NOAA_CHANNEL(gRxVfo->CHANNEL_SAVE))

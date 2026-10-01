@@ -674,7 +674,8 @@ void BK4819_SetupSquelch(
         uint8_t SquelchOpenNoiseThresh,
         uint8_t SquelchCloseNoiseThresh,
         uint8_t SquelchCloseGlitchThresh,
-        uint8_t SquelchOpenGlitchThresh)
+        uint8_t SquelchOpenGlitchThresh,
+        bool narrowRx)
 {
     // REG_70
     //
@@ -719,8 +720,8 @@ void BK4819_SetupSquelch(
 
         // original (*)
     (1u << 14) |                  //  1 ???
-    (5u << 11) |                  // *5  squelch = open  delay .. 0 ~ 7
-    (3u <<  9) |                  // *3  squelch = close delay .. 0 ~ 3
+    ((narrowRx ? 3u : 5u) << 11) | // shorter open delay for NARROW MDC audio
+    (6u <<  9) |                  // upstream K5 squelch timing; reduce jerky RX
     SquelchOpenGlitchThresh);     //  0 ~ 255
 
 

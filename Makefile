@@ -46,8 +46,8 @@ ENABLE_WATERFALL                ?= 0
 ENABLE_SPECTRUM_PEAK_HOLD       ?= 1
 # Curve smoothing (saves ~300 bytes when disabled)
 ENABLE_SPECTRUM_SMOOTH          ?= 1
-# Checkerboard body shade under the spectrum trace (saves FLASH when disabled)
-ENABLE_SPECTRUM_SHADE           ?= 1
+# Checkerboard body shade under the spectrum trace (disabled to preserve flash headroom)
+ENABLE_SPECTRUM_SHADE           ?= 0
 # Interlaced sweeps for >128-step scan ranges
 ENABLE_SPECTRUM_INTERLACE       ?= 0
 # KEY_SIDE1 blacklist of noisy frequencies
