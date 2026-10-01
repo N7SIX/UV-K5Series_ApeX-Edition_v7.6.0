@@ -62,7 +62,7 @@ void SETTINGS_InitEEPROM(void)
         gEeprom.VOX_SWITCH       = (Data[5] <  2) ? Data[5] : false;
         gEeprom.VOX_LEVEL        = (Data[6] < 10) ? Data[6] : 1;
     #endif
-    gEeprom.MIC_SENSITIVITY      = (Data[7] <  5) ? Data[7] : 4;
+    gEeprom.MIC_SENSITIVITY      = (Data[7] < 5) ? Data[7] : 4;
 
     // 0E78..0E7F
     EEPROM_ReadBuffer(0x0E78, Data, 8);
@@ -431,8 +431,6 @@ void SETTINGS_LoadCalibration(void)
         EEPROM_ReadBuffer(0x1F68 + (gEeprom.VOX_LEVEL * 2), &gEeprom.VOX0_THRESHOLD, 2);
     #endif
 
-    //EEPROM_ReadBuffer(0x1F80 + gEeprom.MIC_SENSITIVITY, &Mic, 1);
-    //gEeprom.MIC_SENSITIVITY_TUNING = (Mic < 32) ? Mic : 15;
     gEeprom.MIC_SENSITIVITY_TUNING = gMicGain_dB2[gEeprom.MIC_SENSITIVITY];
 
     {
