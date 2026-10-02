@@ -921,6 +921,10 @@ void RADIO_SetupRegisters(bool switchToForeground)
         BK4819_DisableDTMF();
     }
 
+    if (gEeprom.SQUELCH_LEVEL == 0) {
+        InterruptMask &= ~(BK4819_REG_3F_SQUELCH_FOUND | BK4819_REG_3F_SQUELCH_LOST);
+    }
+
     RADIO_SetupAGC(gRxVfo->Modulation == MODULATION_AM, false);
 
     // enable/disable BK4819 selected interrupts
